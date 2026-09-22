@@ -107,6 +107,38 @@ Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a s
 | Life | steam + air | shield (blocks Plague) |
 | Curse | air + air | locks an enemy element 6s |
 
+## Player accounts & saved data (optional)
+
+Sign-in is **off by default** — the game runs guest-only (type a name, no saved stats)
+until you give it a Google client id. When configured, players **Sign in with Google**
+and the server keeps a profile per player: **name, W/L record (ranked = human vs
+human only), and discovered recipes**, saved through `storage.js`.
+
+**Where data lives:** a JSON file at `data/profiles.json`, behind a tiny
+`getProfile / saveProfile` seam. ⚠️ Render's **free tier wipes the filesystem on every
+redeploy**, so stats won't survive a deploy yet — swap `storage.js`'s body for a free
+managed DB (Upstash Redis / Neon Postgres) when you want durable persistence. Nothing
+else in the app changes.
+
+**Turn it on — make a Google client id (~5 min, free):**
+1. [console.cloud.google.com](https://console.cloud.google.com) → create a project.
+2. **APIs & Services → OAuth consent screen** → External → fill the basics → add
+   yourself under **Test users** (or Publish).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
+   **Web application**.
+4. Under **Authorized JavaScript origins** add both:
+   - `http://localhost:3000`
+   - `https://elementalwarfare.onrender.com`
+5. Copy the **Client ID** (it's public — no secret needed for this flow).
+6. Set it as an env var, locally and on Render:
+   - Local (Git Bash): `GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com npm start`
+   - Render: **Environment → Add** `GOOGLE_CLIENT_ID` = your client id → redeploy.
+
+That's it — the sign-in button appears automatically once the id is set.
+
+> Trust note: a client tells the server its `playerId` when a match starts, so stats
+> aren't cheat-proof — fine for friends. A signed session token would harden it later.
+
 ## Tweak it
 
 - **Damage, HP, the mana curve, lock time, counters** → top of `server.js` (`START_HP`, `AP_CAP`, `apFor`, `ATTACKS`, `LOCK_MS`, `BOT_COSTS`). Server is authoritative, so this is the real balance.

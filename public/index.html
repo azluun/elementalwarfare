@@ -157,7 +157,13 @@
 
   <!-- LOBBY -->
   <div class="lobby" id="lobby">
-    <div><label for="name">Your name</label><input id="name" maxlength="16" placeholder="e.g. username"></div>
+    <div id="authbox" style="display:flex;flex-direction:column;gap:8px;align-items:center">
+      <div id="gsigninbtn"></div>
+      <div id="profilebox" hidden style="font-size:13px;color:var(--soft);text-align:center">
+        Signed in as <b id="pname" style="color:var(--ink)"></b> · <span id="precord" style="color:var(--accent);font-weight:600"></span>
+      </div>
+    </div>
+    <div id="namefield"><label for="name">Your name</label><input id="name" maxlength="16" placeholder="e.g. username"></div>
     <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
     <button id="bot" style="padding:11px;font-size:14px">🤖 Play vs Bot</button>
     <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
@@ -276,7 +282,7 @@ function discover(id){
 
 function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ"[(Math.random()*24)|0]; return s; }
 
-let quick = false, lastMode = "bot", lastRoom = "";
+let quick = false, lastMode = "bot", lastRoom = "", profile = null;
 function openSocket(firstMsg){
   const name = ($("name").value || "Player").trim();
   try{ localStorage.setItem("duel.name", name); }catch(e){}
@@ -286,9 +292,10 @@ function openSocket(firstMsg){
   ws.onclose = () => $("status").textContent = "Disconnected.";
   ws.onmessage = (ev) => handle(JSON.parse(ev.data));
 }
-function connect(room){ quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name })); showInvite(room); }
-function quickmatch(){ quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name })); }
-function botmatch(){ quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name })); }
+const pid = () => profile ? profile.id : null;
+function connect(room){ quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); }
+function quickmatch(){ quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name, playerId: pid() })); }
+function botmatch(){ quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name, playerId: pid() })); }
 function showInvite(room){
   const url = location.origin + location.pathname + "?room=" + room;
   $("invitelink").textContent = url;
@@ -303,6 +310,42 @@ $("joinbtn").onclick = () => {
   if (!c) return $("status").textContent = "Enter a room code (or Create one).";
   connect(c);
 };
+
+// ---- Google sign-in + persistent profile (falls back to guest play if not configured) ----
+fetch("/config").then((r) => r.json()).then((cfg) => {
+  if (!cfg.googleClientId) return; // no client id set on the server -> guest only, keep the name field
+  const s = document.createElement("script");
+  s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+  s.onload = () => {
+    if (!window.google) return;
+    google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential });
+    google.accounts.id.renderButton($("gsigninbtn"), { theme: "filled_black", size: "large", text: "signin_with", shape: "pill" });
+  };
+  document.head.appendChild(s);
+}).catch(() => {});
+
+function onGoogleCredential(resp){
+  fetch("/auth", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ idToken: resp.credential, discovered: [...discovered] }),
+  }).then((r) => r.json()).then((d) => { if (d.profile) setProfile(d.profile); })
+    .catch(() => { $("status").textContent = "Sign-in failed — playing as guest."; });
+}
+function setProfile(p){
+  profile = p;
+  $("gsigninbtn").hidden = true;
+  $("namefield").hidden = true;
+  $("profilebox").hidden = false;
+  $("name").value = p.name;
+  refreshProfileBox();
+  (p.discovered || []).forEach((id) => discovered.add(id)); // fold server-side discoveries into the local set
+  try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
+}
+function refreshProfileBox(){
+  if (!profile) return;
+  $("pname").textContent = profile.name;
+  $("precord").textContent = `${profile.wins||0}W / ${profile.losses||0}L`;
+}
 
 // ---- message handling ----
 function handle(m){
@@ -322,14 +365,18 @@ function showOver(m){
   $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
   $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
   $("over").style.display = "flex";
+  if (profile && lastMode !== "bot" && !draw){ // ranked result — keep local record in sync (server is authoritative)
+    if (won) profile.wins = (profile.wins||0)+1; else profile.losses = (profile.losses||0)+1;
+    refreshProfileBox();
+  }
 }
 function rematch(){
   $("over").style.display = "none";
   inv = {}; plan = []; locked = false;
   const name = ($("name").value || "Player").trim();
-  const first = lastMode === "bot"   ? { type: "botmatch", name }
-              : lastMode === "quick" ? { type: "quickmatch", name }
-              :                        { type: "join", room: lastRoom, name };
+  const first = lastMode === "bot"   ? { type: "botmatch", name, playerId: pid() }
+              : lastMode === "quick" ? { type: "quickmatch", name, playerId: pid() }
+              :                        { type: "join", room: lastRoom, name, playerId: pid() };
   if (lastMode === "room"){ quick = false; showInvite(lastRoom); } else { quick = true; }
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(first));
   else openSocket(() => first);

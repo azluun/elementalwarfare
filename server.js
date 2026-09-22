@@ -4,14 +4,50 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const store = require("./storage");
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, "public");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon" };
 
-// --- static file server (public/ only) ---
+// --- Google Sign-In (optional): if no client id is configured, the game runs guest-only ---
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+let googleClient = null;
+if (GOOGLE_CLIENT_ID) {
+  try { const { OAuth2Client } = require("google-auth-library"); googleClient = new OAuth2Client(GOOGLE_CLIENT_ID); }
+  catch (e) { console.error("google-auth-library not installed; sign-in disabled:", e.message); }
+}
+
+// verify a Google ID token, then load/create that player's profile (merging any local discoveries)
+async function handleAuth(req, res) {
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
+  req.on("end", async () => {
+    try {
+      if (!googleClient) throw new Error("sign-in not configured");
+      const { idToken, discovered } = JSON.parse(body || "{}");
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      const p = ticket.getPayload();
+      const profile = store.getProfile(p.sub) || { id: p.sub, name: p.given_name || p.name || "Player", wins: 0, losses: 0, discovered: [] };
+      const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
+      profile.discovered = [...merged];
+      if (!profile.name) profile.name = p.given_name || p.name || "Player";
+      store.saveProfile(profile.id, profile);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ profile }));
+    } catch (e) {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
+// --- HTTP: config + auth endpoints, then static files from public/ ---
 const server = http.createServer((req, res) => {
-  let f = decodeURIComponent(req.url.split("?")[0]);
+  const url = req.url.split("?")[0];
+  if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID })); }
+  if (url === "/auth" && req.method === "POST") return handleAuth(req, res);
+  let f = decodeURIComponent(url);
   if (f === "/") f = "/index.html";
   const fp = path.join(PUB, path.normalize(f).replace(/^(\.\.[/\\])+/, ""));
   if (!fp.startsWith(PUB)) { res.writeHead(403); return res.end("no"); }
@@ -54,7 +90,7 @@ function pushState(room, log) {
   broadcast(room, { type: "state", players: stateOf(room), log });
 }
 function addPlayer(ws, room, name) {
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null };
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null, playerId: ws.playerId || null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
@@ -122,8 +158,21 @@ function resolveRound(room) {
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
-  if (aDead || bDead) return broadcast(room, { type: "over", winner: aDead && bDead ? null : (aDead ? B.name : A.name) });
+  if (aDead || bDead) {
+    const draw = aDead && bDead;
+    const winner = draw ? null : (aDead ? B : A);
+    const loser  = draw ? null : (aDead ? A : B);
+    if (!room.bot && winner) { bumpRecord(winner, "wins"); bumpRecord(loser, "losses"); } // ranked = human vs human only
+    return broadcast(room, { type: "over", winner: winner ? winner.name : null });
+  }
   nextRound(room);
+}
+function bumpRecord(player, field) {
+  if (!player || !player.playerId) return;
+  const prof = store.getProfile(player.playerId);
+  if (!prof) return;
+  prof[field] = (prof[field] || 0) + 1;
+  store.saveProfile(player.playerId, prof);
 }
 function nextRound(room) {
   room.players.forEach((p) => { p.plan = null; p.ready = false; });
@@ -148,6 +197,7 @@ wss.on("connection", (ws) => {
 
     if (m.type === "join") {
       leaveRoom(ws); // in case this is a rematch on an existing socket
+      ws.playerId = m.playerId || null;
       const code = String(m.room || "MAIN").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || "MAIN";
       let room = rooms.get(code);
       if (!room) { room = { code, players: [] }; rooms.set(code, room); }
@@ -158,6 +208,7 @@ wss.on("connection", (ws) => {
 
     if (m.type === "quickmatch") {
       leaveRoom(ws);
+      ws.playerId = m.playerId || null;
       if (waiting && waiting.ws !== ws && waiting.ws.readyState === 1) {
         const room = { code: randCode(), players: [] };
         rooms.set(room.code, room);
@@ -173,6 +224,7 @@ wss.on("connection", (ws) => {
 
     if (m.type === "botmatch") {
       leaveRoom(ws);
+      ws.playerId = m.playerId || null;
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
