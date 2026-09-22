@@ -66,9 +66,17 @@
     align-items:center;justify-content:center;font-size:24px;color:var(--soft);cursor:pointer}
   .slot.full{border-style:solid;border-color:var(--accent)}
   .op{font-family:var(--dsp);font-size:22px;color:var(--soft)}
-  .cdwrap{height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:8px}
-  .cd{height:100%;width:100%;background:var(--accent);transform-origin:left;transition:transform .05s linear}
   .hint{text-align:center;font-size:12px;color:var(--soft);min-height:16px;margin-top:6px}
+  .turnbar{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:8px 12px;font-weight:700}
+  .turnbar.mine{border-color:var(--accent)} .turnbar.theirs{opacity:.7}
+  #turnmsg{flex:1} .turnbar.mine #turnmsg{color:var(--you)} .turnbar.theirs #turnmsg{color:var(--soft)}
+  .apdots{display:flex;gap:4px}
+  .apdots span{width:12px;height:12px;border-radius:50%;background:var(--line)}
+  .apdots span.on{background:var(--amber)}
+  #endturn{background:var(--panel2)}
+  #endturn:disabled{opacity:.35}
+  .craft.off{opacity:.45;pointer-events:none}
 
   .hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
   .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 6px;
@@ -133,13 +141,18 @@
       <div class="lockwarn" id="lockwarn"></div>
     </div>
 
+    <div class="turnbar" id="turnbar">
+      <span id="turnmsg">Your turn</span>
+      <span class="apdots" id="apdots"></span>
+      <button id="endturn">End turn</button>
+    </div>
+
     <div class="craft" id="craft">
       <div class="bases" id="bases"></div>
       <div class="combine">
         <div class="slot" id="s0"></div><span class="op">+</span><div class="slot" id="s1"></div>
       </div>
-      <div class="cdwrap"><div class="cd" id="cd"></div></div>
-      <div class="hint" id="hint">Pick two elements to craft a card.</div>
+      <div class="hint" id="hint">Craft (1 AP) or deploy a card (1 AP). 3 AP per turn.</div>
     </div>
 
     <div class="hand" id="hand"></div>
@@ -186,8 +199,9 @@ const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();
 $("name").value = localStorage.getItem("duel.name") || "";
 
-let ws, myslot = 0, cooldownUntil = 0, inv = {}, slots = [null,null];
-const CD_MS = 1200;
+let ws, myslot = 0, inv = {}, slots = [null,null];
+let myTurn = false, ap = 0;
+const canAct = () => myTurn && ap > 0;
 
 function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ"[(Math.random()*24)|0]; return s; }
 
@@ -226,7 +240,7 @@ function handle(m){
   if (m.type === "joined")  { myslot = m.slot; if (quick) $("roomtag").textContent = "Matched"; else showInvite(m.code); }
   if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
   if (m.type === "left")    { $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
-  if (m.type === "start" || m.type === "state") { enterArena(); applyState(m.players, m.log); }
+  if (m.type === "start" || m.type === "state") { enterArena(); applyState(m); }
   if (m.type === "over"){
     const won = m.winner === ($("name").value || "Player").trim();
     $("overtitle").textContent = won ? "🏆 Victory" : "☠️ Defeated";
@@ -236,7 +250,8 @@ function handle(m){
 }
 function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; renderBases(); renderInv(); }
 
-function applyState(players, log){
+function applyState(m){
+  const players = m.players, log = m.log;
   const me = players[myslot], foe = players[1-myslot];
   $("myname").textContent = me.name + " (you)"; $("foename").textContent = foe.name;
   $("myhp").textContent = me.hp; $("foehp").textContent = foe.hp;
@@ -244,10 +259,20 @@ function applyState(players, log){
   // my shields as chips (I see my own types); foe as a count only (bluff)
   $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
   $("foeshields").textContent = "Shields set: " + foe.shields.length;
-  // element lock on me
-  myLock = me.lock; renderBases();
+  myLock = me.lock;
   if (me.lock) $("lockwarn").textContent = `⚠ ${me.lock.el} locked!`; else $("lockwarn").textContent="";
+  // server is the authority on whose turn it is and how much AP is left
+  if (typeof m.turn === "number"){ myTurn = m.turn === myslot; ap = m.ap; }
+  updateTurnUI();
   if (log){ const d=document.createElement("div"); d.textContent=log; $("log").prepend(d); }
+}
+function updateTurnUI(){
+  $("turnbar").className = "turnbar " + (myTurn ? "mine" : "theirs");
+  $("turnmsg").textContent = myTurn ? "Your turn" : "Opponent's turn";
+  $("apdots").innerHTML = [0,1,2].map(i=>`<span class="${i<ap?"on":""}"></span>`).join("");
+  $("endturn").disabled = !myTurn;
+  $("craft").classList.toggle("off", !canAct());
+  renderBases(); renderInv();
 }
 
 // ---- crafting ----
@@ -258,12 +283,14 @@ function renderBases(){
   for (const [el,em] of Object.entries(BASE)){
     const b = document.createElement("button");
     b.className = "base" + (locked(el) ? " locked":"");
+    b.disabled = !canAct();
     b.innerHTML = `<span>${em}</span><small>${el}</small>`;
     b.onclick = () => addToSlot(el);
     $("bases").appendChild(b);
   }
 }
 function addToSlot(el){
+  if (!canAct()){ $("hint").textContent = myTurn ? "No action points left — end your turn." : "Wait for your turn."; return; }
   const i = slots[0]===null?0 : slots[1]===null?1 : 0;
   if (i===0) slots=[el,null]; else slots[1]=el;
   renderSlots();
@@ -277,11 +304,10 @@ $("s0").onclick = () => { slots=[slots[1],null]; renderSlots(); };
 $("s1").onclick = () => { slots[1]=null; renderSlots(); };
 
 function craft(){
-  const now = Date.now();
   const a = slots[0], b = slots[1];
   const id = RECIPE[[a,b].sort().join("+")];
   const clear = () => { slots=[null,null]; renderSlots(); };
-  if (now < cooldownUntil){ $("hint").textContent="Still recharging…"; flash(); clear(); return; }
+  if (!canAct()){ clear(); return; }
   // crafted ingredients must be in your inventory (bases are unlimited)
   const need = {};
   [a,b].forEach(x => { if (!BASE[x]) need[x] = (need[x]||0)+1; });
@@ -291,17 +317,11 @@ function craft(){
   if (!id){ $("hint").textContent="Those two make nothing."; flash(); clear(); return; }
   for (const k in need) inv[k] -= need[k];   // consume ingredients
   inv[id] = (inv[id]||0) + 1;                // gain the new element
-  $("hint").textContent = `Crafted ${CARDS[id].name}!`;
-  cooldownUntil = now + CD_MS;
-  clear(); renderInv();
+  $("hint").textContent = `Crafted ${CARDS[id].name}! (−1 AP)`;
+  ap--; ws.send(JSON.stringify({ type:"craft" })); // spend an action point (server confirms)
+  clear(); updateTurnUI();
 }
 function flash(){ $("craft").classList.add("shake"); setTimeout(()=>$("craft").classList.remove("shake"),300); }
-
-// cooldown bar
-setInterval(() => {
-  const left = cooldownUntil - Date.now();
-  $("cd").style.transform = "scaleX(" + (left>0 ? 1-left/CD_MS : 1) + ")";
-}, 50);
 
 // ---- inventory: crafted elements you own (click to advance, button to deploy) ----
 function renderInv(){
@@ -318,7 +338,8 @@ function renderInv(){
     el.onclick = (e) => { if (e.target.tagName !== "BUTTON") addToSlot(id); };  // advance
     if (c.kind === "attack" || c.kind === "shield" || c.kind === "curse"){
       const btn = document.createElement("button");
-      btn.textContent = c.kind==="attack" ? "Attack" : c.kind==="shield" ? "Set shield" : "Cast";
+      btn.textContent = (c.kind==="attack" ? "Attack" : c.kind==="shield" ? "Set shield" : "Cast") + " (1 AP)";
+      btn.disabled = !canAct();
       btn.onclick = () => deploy(id);
       el.appendChild(btn);
     }
@@ -327,12 +348,13 @@ function renderInv(){
 }
 function deploy(id){
   const c = CARDS[id];
-  if (!ws || ws.readyState!==1 || !(inv[id] > 0)) return;
+  if (!ws || ws.readyState!==1 || !(inv[id] > 0) || !canAct()) return;
   if (c.kind==="attack") ws.send(JSON.stringify({ type:"attack", card:id }));
   else if (c.kind==="shield") ws.send(JSON.stringify({ type:"shield", card:id }));
   else if (c.kind==="curse") ws.send(JSON.stringify({ type:"curse" }));
-  inv[id]--; renderInv(); // consumed
+  inv[id]--; ap--; updateTurnUI(); // consumed, −1 AP (server confirms)
 }
+$("endturn").onclick = () => { if (myTurn && ws && ws.readyState===1){ ws.send(JSON.stringify({ type:"endturn" })); } };
 </script>
 </body>
 </html>

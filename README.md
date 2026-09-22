@@ -57,16 +57,23 @@ your room, and the duel starts when you're both in.
 
 ## How a match works
 
+**Turn-based, 3 action points per turn.** Craft = 1 AP, deploy = 1 AP. Spend up to
+3, then **End turn** (or it auto-ends at 0 AP) and your opponent goes. Your
+inventory carries across turns, so you can build a big card over two turns.
+
 - **Bases** 🔥💧🌍💨 are always available. Combine two → the result lands in your
   **inventory** as an element you own.
 - **Advance**: click an owned element to drop it back into the combiner — deeper
   cards need intermediates (Lava, Energy, Mud, Steam, Mountain). Combining spends
-  the ingredients.
-- **Deploy**: an element with a role has a button — **Attack**, **Set shield**, or
-  **Cast** — which spends one from your inventory.
+  the ingredients (and 1 AP).
+- **Deploy** (1 AP): an element with a role has a button — **Attack**, **Set
+  shield**, or **Cast** — which spends one from your inventory.
 - **Shields** wait in your defense and eat the one attack they counter, then they're
   spent. **Curse** 🌀 locks a random enemy element for 6s.
 - First to 0 HP (of 30) loses.
+
+A big attack costs a whole turn: Meteor = craft Lava + craft Meteor + Attack = 3 AP.
+A cheap Storm = craft Storm + Attack = 2 AP, leaving 1 AP to start crafting your next.
 
 Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a step up:
 
@@ -88,8 +95,8 @@ Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a s
 
 ## Tweak it
 
-- **Damage, HP, lock time, counters** → top of `server.js` (`START_HP`, `ATTACKS`, `LOCK_MS`). Server is authoritative, so this is the real balance.
-- **Recipes, card art/text, craft cooldown** → `CARDS` and `CD_MS` in `public/index.html`.
+- **Damage, HP, action points, lock time, counters** → top of `server.js` (`START_HP`, `TURN_AP`, `ATTACKS`, `LOCK_MS`, `BOT_COSTS`). Server is authoritative, so this is the real balance.
+- **Recipes, card art/text** → `CARDS` in `public/index.html`.
 - Keep the two `ATTACKS`/`CARDS` tables in sync when you add a card.
 
 ## Not built yet (add when you want)
