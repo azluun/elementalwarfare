@@ -223,7 +223,10 @@
 <div class="over" id="over"><div class="box">
   <h2 id="overtitle">—</h2>
   <p id="oversub" style="color:var(--soft)"></p>
-  <button class="pri" onclick="location.reload()" style="background:var(--accent);color:#0e120a;border-color:transparent">Rematch</button>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
+    <button id="rematch" class="pri" style="background:var(--accent);color:#0e120a;border-color:transparent">Rematch</button>
+    <button id="tomenu">Back to menu</button>
+  </div>
 </div></div>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Spline+Sans:wght@400;600;700&display=swap">
@@ -248,7 +251,7 @@ const CARDS = {
   planet:  {em:"🌐",name:"Planet",  kind:"shield",recipe:["mountain","earth"],info:"blocks Meteor"},
   life:    {em:"🌿",name:"Life",    kind:"shield",recipe:["steam","air"],    info:"blocks Plague"},
   // -- disruption --
-  curse:   {em:"🌀",name:"Curse",   kind:"curse", recipe:["air","air"],      info:"locks an enemy element 6s"},
+  curse:   {em:"🌀",name:"Curse",   kind:"curse", recipe:["air","air"],      info:"locks an enemy element 1 round"},
 };
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
@@ -273,7 +276,7 @@ function discover(id){
 
 function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ"[(Math.random()*24)|0]; return s; }
 
-let quick = false;
+let quick = false, lastMode = "bot", lastRoom = "";
 function openSocket(firstMsg){
   const name = ($("name").value || "Player").trim();
   try{ localStorage.setItem("duel.name", name); }catch(e){}
@@ -283,9 +286,9 @@ function openSocket(firstMsg){
   ws.onclose = () => $("status").textContent = "Disconnected.";
   ws.onmessage = (ev) => handle(JSON.parse(ev.data));
 }
-function connect(room){ quick = false; openSocket((name)=>({ type:"join", room, name })); showInvite(room); }
-function quickmatch(){ quick = true; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name })); }
-function botmatch(){ quick = true; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name })); }
+function connect(room){ quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name })); showInvite(room); }
+function quickmatch(){ quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name })); }
+function botmatch(){ quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name })); }
 function showInvite(room){
   const url = location.origin + location.pathname + "?room=" + room;
   $("invitelink").textContent = url;
@@ -308,7 +311,7 @@ function handle(m){
   if (m.type === "joined")  { myslot = m.slot; if (quick) $("roomtag").textContent = "Matched"; else showInvite(m.code); }
   if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
   if (m.type === "left")    { $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
-  if (m.type === "start")   { enterArena(); newRound(m); }
+  if (m.type === "start")   { $("over").style.display = "none"; inv = {}; enterArena(); newRound(m); }
   if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
   if (m.type === "resolve") { startReveal(m); }
   if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
@@ -320,6 +323,27 @@ function showOver(m){
   $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
   $("over").style.display = "flex";
 }
+function rematch(){
+  $("over").style.display = "none";
+  inv = {}; plan = []; locked = false;
+  const name = ($("name").value || "Player").trim();
+  const first = lastMode === "bot"   ? { type: "botmatch", name }
+              : lastMode === "quick" ? { type: "quickmatch", name }
+              :                        { type: "join", room: lastRoom, name };
+  if (lastMode === "room"){ quick = false; showInvite(lastRoom); } else { quick = true; }
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(first));
+  else openSocket(() => first);
+}
+function backToMenu(){
+  if (ws){ ws.onclose = null; try { ws.close(); } catch(e){} } // silent close, no "Disconnected" flash
+  $("over").style.display = "none";
+  $("arena").style.display = "none";
+  $("lobby").style.display = "flex";
+  $("status").textContent = ""; $("roomtag").textContent = "";
+  inv = {}; plan = []; locked = false;
+}
+$("rematch").onclick = rematch;
+$("tomenu").onclick = backToMenu;
 function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; }
 function addLog(t){ const d=document.createElement("div"); d.textContent=t; $("log").prepend(d); }
 
@@ -361,7 +385,7 @@ function updateUI(){
 }
 
 // ---- crafting ----
-function isLocked(el){ return myLock && myLock.el === el && myLock.until > Date.now(); }
+function isLocked(el){ return !!(myLock && myLock.el === el); }
 function renderBases(){
   $("bases").innerHTML = "";
   for (const [el,em] of Object.entries(BASE)){
@@ -572,7 +596,7 @@ function renderSheet(mode){
     return `<div class="crow"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg</span><span class="arrow">→ blocked by</span><span class="s">${blk}</span></div>`;
   }).join("");
   const curseRow = (!known || discovered.has("curse"))
-    ? `<div class="crow"><span class="a">🌀 Curse</span><span></span><span class="arrow">→</span><span class="s">no block · locks 6s</span></div>` : "";
+    ? `<div class="crow"><span class="a">🌀 Curse</span><span></span><span class="arrow">→</span><span class="s">no block · locks 1 round</span></div>` : "";
 
   const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
     .map((id) => `<div class="rrow">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");

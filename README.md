@@ -76,7 +76,8 @@ late rounds swing hard.
   shields brace first (so a shield staged this round blocks an attack thrown this
   round), then attacks land blow by blow with damage pops and HP ticking down. Both
   sides' attacks land together (mutual damage is possible). **Curse** 🌀 locks a
-  random enemy element for 6s.
+  random enemy base element for the whole next round (can't craft with it).
+- Game over gives you **Rematch** (same opponent/mode, fresh match) or **Back to menu**.
 - First to 0 HP (of 30) loses. Both to 0 in the same round = a draw.
 
 Since you can't see their plan, the counter chart becomes a read: *will they Meteor?

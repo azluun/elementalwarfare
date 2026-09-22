@@ -24,7 +24,7 @@ const server = http.createServer((req, res) => {
 
 // --- authoritative combat rules (client mirrors these for its own UI) ---
 const START_HP = 30;
-const LOCK_MS = 6000;
+const LOCK_ROUNDS = 1; // curse locks a base element for this many upcoming rounds
 const AP_CAP = 5;
 const apFor = (round) => Math.min(AP_CAP, round + 1); // mana curve: round 1 = 2 AP, +1 per round, capped
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
@@ -47,7 +47,7 @@ function stateOf(room) {
     name: p.name,
     hp: p.hp,
     shields: p.shields.slice(),
-    lock: p.lock && p.lock.until > Date.now() ? p.lock : null,
+    lock: (p.lock && room.round != null && p.lock.round >= room.round) ? { el: p.lock.el, round: p.lock.round } : null,
   }));
 }
 function pushState(room, log) {
@@ -65,6 +65,20 @@ function addPlayer(ws, room, name) {
   } else {
     send(ws, { type: "waiting" });
   }
+}
+
+function leaveRoom(ws) { // used when a socket starts a new match (rematch) or disconnects
+  if (waiting && waiting.ws === ws) waiting = null;
+  const room = ws.room;
+  if (!room) return;
+  clearTimeout(room.timer);
+  if (room.bot) { rooms.delete(room.code); }
+  else {
+    room.players = room.players.filter((p) => p !== ws.me);
+    if (room.players.length === 0) rooms.delete(room.code);
+    else broadcast(room, { type: "left" });
+  }
+  ws.room = null; ws.me = null;
 }
 
 // --- bot: builds a plan for the round out of its AP budget (each card costs craft + deploy) ---
@@ -95,7 +109,7 @@ function resolveRound(room) {
   // 2) curses
   for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "curse")) {
     const el = ["fire", "water", "earth", "air"][(Math.random() * 4) | 0];
-    opp.lock = { el, until: Date.now() + LOCK_MS };
+    opp.lock = { el, round: room.round + LOCK_ROUNDS }; // locked through this future round
     events.push({ t: "curse", who: slot(me), el });
     logs.push(`🌀 ${me.name} curses ${opp.name}'s ${el}`);
   }
@@ -133,6 +147,7 @@ wss.on("connection", (ws) => {
     try { m = JSON.parse(raw); } catch { return; }
 
     if (m.type === "join") {
+      leaveRoom(ws); // in case this is a rematch on an existing socket
       const code = String(m.room || "MAIN").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || "MAIN";
       let room = rooms.get(code);
       if (!room) { room = { code, players: [] }; rooms.set(code, room); }
@@ -142,6 +157,7 @@ wss.on("connection", (ws) => {
     }
 
     if (m.type === "quickmatch") {
+      leaveRoom(ws);
       if (waiting && waiting.ws !== ws && waiting.ws.readyState === 1) {
         const room = { code: randCode(), players: [] };
         rooms.set(room.code, room);
@@ -156,6 +172,7 @@ wss.on("connection", (ws) => {
     }
 
     if (m.type === "botmatch") {
+      leaveRoom(ws);
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
