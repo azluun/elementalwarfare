@@ -4,7 +4,7 @@
   "private": true,
   "description": "Local online PvP: combine elements into cards, attack and defend.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env server.js"
   },
   "engines": {
     "node": ">=18"

@@ -143,6 +143,9 @@
   .over .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center;max-width:320px}
   .over h2{font-family:var(--dsp);margin:0 0 8px;font-size:28px}
   .chart{font-size:11px;color:var(--soft);text-align:center;margin-top:4px}
+  [hidden]{display:none!important}
+  .namemodal{position:fixed;inset:0;background:rgba(8,10,7,.88);display:flex;align-items:center;justify-content:center;padding:20px;z-index:26}
+  .nmbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:320px;width:100%;text-align:center;display:flex;flex-direction:column;gap:10px}
 </style>
 </head>
 <body>
@@ -159,23 +162,26 @@
   <div class="lobby" id="lobby">
     <div id="authbox" style="display:flex;flex-direction:column;gap:8px;align-items:center">
       <div id="gsigninbtn"></div>
+      <div id="signinnote" style="font-size:13px;color:var(--soft);text-align:center">Sign in with Google to play.</div>
       <div id="profilebox" hidden style="font-size:13px;color:var(--soft);text-align:center">
         Signed in as <b id="pname" style="color:var(--ink)"></b> · <span id="precord" style="color:var(--accent);font-weight:600"></span>
+        <button id="signout" style="padding:3px 8px;font-size:11px;margin-left:6px">Sign out</button>
       </div>
     </div>
-    <div id="namefield"><label for="name">Your name</label><input id="name" maxlength="16" placeholder="e.g. username"></div>
-    <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
-    <button id="bot" style="padding:11px;font-size:14px">🤖 Play vs Bot</button>
-    <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
-    <div><label for="room">Room code</label><input id="room" maxlength="6" placeholder="you will see your code here" style="text-transform:uppercase"></div>
-    <div class="row">
-      <button id="create">Create room</button>
-      <button id="joinbtn">Join room</button>
-    </div>
-    <div class="status" id="status"></div>
-    <div class="invite" id="invite" hidden>
-      Send this link to your friend:
-      <code id="invitelink"></code>
+    <div id="menu" hidden style="display:flex;flex-direction:column;gap:14px">
+      <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
+      <button id="bot" style="padding:11px;font-size:14px">🤖 Play vs Bot</button>
+      <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
+      <div><label for="room">Room code</label><input id="room" maxlength="6" placeholder="you will see your code here" style="text-transform:uppercase"></div>
+      <div class="row">
+        <button id="create">Create room</button>
+        <button id="joinbtn">Join room</button>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="invite" id="invite" hidden>
+        Send this link to your friend:
+        <code id="invitelink"></code>
+      </div>
     </div>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
   </div>
@@ -226,6 +232,15 @@
   </div>
 </div>
 
+<div class="namemodal" id="namemodal" hidden>
+  <div class="nmbox">
+    <b style="font-family:var(--dsp);font-size:19px">Choose your player name</b>
+    <p style="font-size:13px;color:var(--soft);margin:0">This is how other players will see you.</p>
+    <input id="pnameinput" maxlength="16" placeholder="Player name">
+    <button class="pri" id="pnamesave" style="background:var(--accent);color:#0e120a;border-color:transparent">Save &amp; continue</button>
+  </div>
+</div>
+
 <div class="over" id="over"><div class="box">
   <h2 id="overtitle">—</h2>
   <p id="oversub" style="color:var(--soft)"></p>
@@ -267,7 +282,6 @@ const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();
-$("name").value = localStorage.getItem("duel.name") || "";
 
 let ws, myslot = 0, inv = {}, slots = [null,null];
 
@@ -284,8 +298,7 @@ function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ
 
 let quick = false, lastMode = "bot", lastRoom = "", profile = null;
 function openSocket(firstMsg){
-  const name = ($("name").value || "Player").trim();
-  try{ localStorage.setItem("duel.name", name); }catch(e){}
+  const name = profile ? profile.name : "Player";
   $("status").textContent = "Connecting…";
   ws = new WebSocket(location.origin.replace(/^http/,"ws"));
   ws.onopen = () => ws.send(JSON.stringify(firstMsg(name)));
@@ -293,9 +306,9 @@ function openSocket(firstMsg){
   ws.onmessage = (ev) => handle(JSON.parse(ev.data));
 }
 const pid = () => profile ? profile.id : null;
-function connect(room){ quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); }
-function quickmatch(){ quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name, playerId: pid() })); }
-function botmatch(){ quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name, playerId: pid() })); }
+function connect(room){ if (!profile) return; quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); }
+function quickmatch(){ if (!profile) return; quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name, playerId: pid() })); }
+function botmatch(){ if (!profile) return; quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name, playerId: pid() })); }
 function showInvite(room){
   const url = location.origin + location.pathname + "?room=" + room;
   $("invitelink").textContent = url;
@@ -311,9 +324,10 @@ $("joinbtn").onclick = () => {
   connect(c);
 };
 
-// ---- Google sign-in + persistent profile (falls back to guest play if not configured) ----
+// ---- Google sign-in required + persistent profile (first login asks for a name) ----
+let lastIdToken = null;
 fetch("/config").then((r) => r.json()).then((cfg) => {
-  if (!cfg.googleClientId) return; // no client id set on the server -> guest only, keep the name field
+  if (!cfg.googleClientId){ $("signinnote").textContent = "⚠ Sign-in isn't set up on this server yet."; return; }
   const s = document.createElement("script");
   s.src = "https://accounts.google.com/gsi/client"; s.async = true;
   s.onload = () => {
@@ -324,19 +338,31 @@ fetch("/config").then((r) => r.json()).then((cfg) => {
   document.head.appendChild(s);
 }).catch(() => {});
 
-function onGoogleCredential(resp){
+function onGoogleCredential(resp){ lastIdToken = resp.credential; submitAuth(null); }
+function submitAuth(name){
   fetch("/auth", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ idToken: resp.credential, discovered: [...discovered] }),
-  }).then((r) => r.json()).then((d) => { if (d.profile) setProfile(d.profile); })
-    .catch(() => { $("status").textContent = "Sign-in failed — playing as guest."; });
+    body: JSON.stringify({ idToken: lastIdToken, name, discovered: [...discovered] }),
+  }).then((r) => r.json()).then((d) => {
+    if (d.needsName){ showNameModal(d.suggestedName); }        // first login -> pick a name
+    else if (d.profile){ $("namemodal").hidden = true; setProfile(d.profile); }
+    else { $("signinnote").textContent = "Sign-in failed — try again."; }
+  }).catch(() => { $("signinnote").textContent = "Sign-in failed — try again."; });
 }
+function showNameModal(suggested){
+  $("pnameinput").value = suggested || "";
+  $("namemodal").hidden = false;
+  setTimeout(() => $("pnameinput").focus(), 50);
+}
+$("pnamesave").onclick = () => { const n = ($("pnameinput").value||"").trim(); if (n) submitAuth(n); };
+$("pnameinput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pnamesave").click(); });
+
 function setProfile(p){
   profile = p;
   $("gsigninbtn").hidden = true;
-  $("namefield").hidden = true;
+  $("signinnote").hidden = true;
   $("profilebox").hidden = false;
-  $("name").value = p.name;
+  $("menu").hidden = false;      // playing is unlocked only once signed in
   refreshProfileBox();
   (p.discovered || []).forEach((id) => discovered.add(id)); // fold server-side discoveries into the local set
   try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
@@ -346,6 +372,14 @@ function refreshProfileBox(){
   $("pname").textContent = profile.name;
   $("precord").textContent = `${profile.wins||0}W / ${profile.losses||0}L`;
 }
+$("signout").onclick = () => {
+  try { google.accounts.id.disableAutoSelect(); } catch(e){}
+  profile = null;
+  $("menu").hidden = true;
+  $("profilebox").hidden = true;
+  $("gsigninbtn").hidden = false;
+  $("signinnote").hidden = false;
+};
 
 // ---- message handling ----
 function handle(m){
@@ -360,7 +394,7 @@ function handle(m){
   if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
 }
 function showOver(m){
-  const meName = ($("name").value || "Player").trim();
+  const meName = profile ? profile.name : "";
   const draw = m.winner === null, won = m.winner === meName;
   $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
   $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
@@ -373,7 +407,7 @@ function showOver(m){
 function rematch(){
   $("over").style.display = "none";
   inv = {}; plan = []; locked = false;
-  const name = ($("name").value || "Player").trim();
+  const name = profile ? profile.name : "Player";
   const first = lastMode === "bot"   ? { type: "botmatch", name, playerId: pid() }
               : lastMode === "quick" ? { type: "quickmatch", name, playerId: pid() }
               :                        { type: "join", room: lastRoom, name, playerId: pid() };

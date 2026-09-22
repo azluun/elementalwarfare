@@ -25,16 +25,16 @@ async function handleAuth(req, res) {
   req.on("end", async () => {
     try {
       if (!googleClient) throw new Error("sign-in not configured");
-      const { idToken, discovered } = JSON.parse(body || "{}");
+      const { idToken, discovered, name } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = store.getProfile(p.sub) || { id: p.sub, name: p.given_name || p.name || "Player", wins: 0, losses: 0, discovered: [] };
+      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, discovered: [] };
+      if (typeof name === "string" && name.trim()) profile.name = name.trim().slice(0, 16); // chosen at first login
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
-      if (!profile.name) profile.name = p.given_name || p.name || "Player";
       store.saveProfile(profile.id, profile);
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ profile }));
+      res.end(JSON.stringify({ profile, needsName: !profile.name, suggestedName: p.given_name || p.name || "" }));
     } catch (e) {
       res.writeHead(401, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
