@@ -1,0 +1,15 @@
+{
+  "name": "elemental-duel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local online PvP: combine elements into cards, attack and defend.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

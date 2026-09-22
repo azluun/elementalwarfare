@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elemental Duel</title>
+<style>
+  :root{
+    --bg:#0f1310; --panel:#182019; --panel2:#20291f; --line:#2c3828;
+    --ink:#e9ecdf; --soft:#9aa389; --accent:#54b483; --amber:#e0a24b;
+    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a;
+    --dsp:"Fraunces",Georgia,serif; --body:"Spline Sans","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.4;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;
+    padding:16px}
+  h1{font-family:var(--dsp);font-weight:600;margin:0;font-size:clamp(24px,6vw,34px);letter-spacing:-.02em}
+  h1 .z{color:var(--foe)}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+    color:var(--ink);border-radius:10px;padding:8px 12px;font-weight:600;font-size:13px;
+    transition:transform .07s,background .15s,opacity .15s}
+  button:hover:not(:disabled){background:var(--line)}
+  button:active:not(:disabled){transform:translateY(1px)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  input{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;padding:9px 11px;font-size:14px;width:100%}
+  label{font-size:12px;color:var(--soft);display:block;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em}
+
+  /* ---- lobby ---- */
+  .lobby{max-width:380px;margin:auto;display:flex;flex-direction:column;gap:14px;width:100%}
+  .lobby .row{display:flex;gap:8px}
+  .lobby .row button{flex:1}
+  .invite{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px}
+  .invite code{display:block;background:var(--bg);border:1px solid var(--line);border-radius:8px;
+    padding:8px;margin-top:6px;word-break:break-all;color:var(--accent);font-size:12px}
+  .status{color:var(--amber);font-size:13px;text-align:center;min-height:18px}
+
+  /* ---- arena ---- */
+  .arena{display:none;flex-direction:column;gap:12px;flex:1}
+  .fighter{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .fighter .top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}
+  .foe .name{color:var(--foe)} .me .name{color:var(--you)}
+  .hpwrap{height:14px;background:var(--bg);border-radius:8px;overflow:hidden;margin-top:6px;border:1px solid var(--line)}
+  .hp{height:100%;transition:width .3s}
+  .foe .hp{background:var(--foe)} .me .hp{background:var(--you)}
+  .shields{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;min-height:26px}
+  .chip{background:var(--bg);border:1px solid var(--shield);border-radius:8px;padding:3px 8px;font-size:12px;color:var(--shield)}
+  .foecount{font-size:12px;color:var(--soft)}
+  .lockwarn{color:var(--foe);font-size:12px;margin-top:4px;min-height:15px}
+
+  .log{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;
+    height:86px;overflow-y:auto;font-size:13px;display:flex;flex-direction:column-reverse;gap:3px}
+  .log div{color:var(--soft)} .log div:first-child{color:var(--ink)}
+
+  .craft{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .bases{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .base{width:60px;height:60px;border-radius:12px;font-size:26px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:2px;line-height:1}
+  .base small{font-size:10px;color:var(--soft);font-weight:600}
+  .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
+  .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
+  .slot{width:56px;height:56px;border:1.5px dashed var(--line);border-radius:12px;display:flex;
+    align-items:center;justify-content:center;font-size:24px;color:var(--soft);cursor:pointer}
+  .slot.full{border-style:solid;border-color:var(--accent)}
+  .op{font-family:var(--dsp);font-size:22px;color:var(--soft)}
+  .cdwrap{height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:8px}
+  .cd{height:100%;width:100%;background:var(--accent);transform-origin:left;transition:transform .05s linear}
+  .hint{text-align:center;font-size:12px;color:var(--soft);min-height:16px;margin-top:6px}
+
+  .hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 6px;
+    display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer}
+  .card:hover{border-color:var(--accent)}
+  .card.item{opacity:.92}
+  .card .em{font-size:26px;line-height:1}
+  .card .cn{font-size:11.5px;font-weight:700}
+  .card .cd2{font-size:10px;color:var(--soft)}
+  .card.attack{border-color:var(--foe)} .card.shield{border-color:var(--shield)} .card.curse{border-color:var(--amber)}
+  .card button{width:100%;padding:5px;font-size:11px;margin-top:2px}
+  .emptyhand{color:var(--soft);font-size:13px;text-align:center;padding:10px}
+
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .shake{animation:shake .3s}
+  .over{position:fixed;inset:0;background:rgba(8,10,7,.86);display:none;align-items:center;justify-content:center;padding:20px}
+  .over .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center;max-width:320px}
+  .over h2{font-family:var(--dsp);margin:0 0 8px;font-size:28px}
+  .chart{font-size:11px;color:var(--soft);text-align:center;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+    <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
+    <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="lobby" id="lobby">
+    <div><label for="name">Your name</label><input id="name" maxlength="16" placeholder="e.g. username"></div>
+    <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
+    <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
+    <div><label for="room">Room code</label><input id="room" maxlength="6" placeholder="you will see your code here" style="text-transform:uppercase"></div>
+    <div class="row">
+      <button id="create">Create room</button>
+      <button id="joinbtn">Join room</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="invite" id="invite" hidden>
+      Send this link to your friend:
+      <code id="invitelink"></code>
+    </div>
+    <div class="chart">Craft intermediates (Lava · Energy · Mud · Steam · Mountain) to reach the big cards.<br>Counters: Firebolt↔Ward · Meteor↔Planet · Storm↔Mountain · Plague↔Life · Curse locks an element</div>
+  </div>
+
+  <!-- ARENA -->
+  <div class="arena" id="arena">
+    <div class="fighter foe">
+      <div class="top"><span class="name" id="foename">Opponent</span><span id="foehp">30</span></div>
+      <div class="hpwrap"><div class="hp" id="foebar" style="width:100%"></div></div>
+      <div class="foecount" id="foeshields">Shields: 0</div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="fighter me">
+      <div class="top"><span class="name" id="myname">You</span><span id="myhp">30</span></div>
+      <div class="hpwrap"><div class="hp" id="mybar" style="width:100%"></div></div>
+      <div class="shields" id="myshields"></div>
+      <div class="lockwarn" id="lockwarn"></div>
+    </div>
+
+    <div class="craft" id="craft">
+      <div class="bases" id="bases"></div>
+      <div class="combine">
+        <div class="slot" id="s0"></div><span class="op">+</span><div class="slot" id="s1"></div>
+      </div>
+      <div class="cdwrap"><div class="cd" id="cd"></div></div>
+      <div class="hint" id="hint">Pick two elements to craft a card.</div>
+    </div>
+
+    <div class="hand" id="hand"></div>
+  </div>
+</div>
+
+<div class="over" id="over"><div class="box">
+  <h2 id="overtitle">—</h2>
+  <p id="oversub" style="color:var(--soft)"></p>
+  <button class="pri" onclick="location.reload()" style="background:var(--accent);color:#0e120a;border-color:transparent">Rematch</button>
+</div></div>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Spline+Sans:wght@400;600;700&display=swap">
+
+<script>
+// ---- card definitions (mirror server ATTACKS for the offense numbers) ----
+const BASE = { fire:"🔥", water:"💧", earth:"🌍", air:"💨" };
+const CARDS = {
+  // -- intermediates: elements you craft, then feed into the recipes below --
+  steam:   {em:"♨️",name:"Steam", kind:"item",  recipe:["fire","water"], info:"ingredient → Life"},
+  lava:    {em:"🌋",name:"Lava",  kind:"item",  recipe:["fire","earth"], info:"ingredient → Meteor"},
+  energy:  {em:"⚡",name:"Energy",kind:"item",  recipe:["fire","air"],   info:"ingredient → Firebolt, Plague"},
+  mud:     {em:"🟤",name:"Mud",   kind:"item",  recipe:["water","earth"],info:"ingredient → Plague"},
+  // -- attacks --
+  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, recipe:["water","air"],  info:"8 dmg · blocked by Mountain"},
+  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, recipe:["energy","fire"],info:"6 dmg · blocked by Ward"},
+  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:12,recipe:["lava","fire"],  info:"12 dmg · blocked by Planet"},
+  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:10,recipe:["mud","energy"], info:"10 dmg · blocked by Life"},
+  // -- shields (Mountain also advances into Planet) --
+  mountain:{em:"⛰️",name:"Mountain",kind:"shield",recipe:["earth","air"],    info:"blocks Storm · or craft Planet"},
+  ward:    {em:"💧",name:"Water Ward",kind:"shield",recipe:["water","water"],info:"blocks Firebolt"},
+  planet:  {em:"🌐",name:"Planet",  kind:"shield",recipe:["mountain","earth"],info:"blocks Meteor"},
+  life:    {em:"🌿",name:"Life",    kind:"shield",recipe:["steam","air"],    info:"blocks Plague"},
+  // -- disruption --
+  curse:   {em:"🌀",name:"Curse",   kind:"curse", recipe:["air","air"],      info:"locks an enemy element 6s"},
+};
+const RECIPE = {}; // "a+b" -> cardId
+for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
+const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
+
+// ---- lobby / connection ----
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+if (params.get("room")) $("room").value = params.get("room").toUpperCase();
+$("name").value = localStorage.getItem("duel.name") || "";
+
+let ws, myslot = 0, cooldownUntil = 0, inv = {}, slots = [null,null];
+const CD_MS = 1200;
+
+function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ"[(Math.random()*24)|0]; return s; }
+
+let quick = false;
+function openSocket(firstMsg){
+  const name = ($("name").value || "Player").trim();
+  try{ localStorage.setItem("duel.name", name); }catch(e){}
+  $("status").textContent = "Connecting…";
+  ws = new WebSocket(location.origin.replace(/^http/,"ws"));
+  ws.onopen = () => ws.send(JSON.stringify(firstMsg(name)));
+  ws.onclose = () => $("status").textContent = "Disconnected.";
+  ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+}
+function connect(room){ quick = false; openSocket((name)=>({ type:"join", room, name })); showInvite(room); }
+function quickmatch(){ quick = true; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name })); }
+function showInvite(room){
+  const url = location.origin + location.pathname + "?room=" + room;
+  $("invitelink").textContent = url;
+  $("invite").hidden = false;
+  $("roomtag").textContent = "Room " + room;
+}
+$("quick").onclick = quickmatch;
+$("create").onclick = () => { const c = randCode(); $("room").value = c; connect(c); };
+$("joinbtn").onclick = () => {
+  const c = ($("room").value || "").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if (!c) return $("status").textContent = "Enter a room code (or Create one).";
+  connect(c);
+};
+
+// ---- message handling ----
+function handle(m){
+  if (m.type === "full")    return $("status").textContent = "That room is full.";
+  if (m.type === "searching") $("status").textContent = "🔎 Searching for an opponent…";
+  if (m.type === "joined")  { myslot = m.slot; if (quick) $("roomtag").textContent = "Matched"; else showInvite(m.code); }
+  if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
+  if (m.type === "left")    { $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
+  if (m.type === "start" || m.type === "state") { enterArena(); applyState(m.players, m.log); }
+  if (m.type === "over"){
+    const won = m.winner === ($("name").value || "Player").trim();
+    $("overtitle").textContent = won ? "🏆 Victory" : "☠️ Defeated";
+    $("oversub").textContent = won ? "You crushed them." : m.winner + " won.";
+    $("over").style.display = "flex";
+  }
+}
+function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; renderBases(); renderInv(); }
+
+function applyState(players, log){
+  const me = players[myslot], foe = players[1-myslot];
+  $("myname").textContent = me.name + " (you)"; $("foename").textContent = foe.name;
+  $("myhp").textContent = me.hp; $("foehp").textContent = foe.hp;
+  $("mybar").style.width = (me.hp/30*100)+"%"; $("foebar").style.width = (foe.hp/30*100)+"%";
+  // my shields as chips (I see my own types); foe as a count only (bluff)
+  $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
+  $("foeshields").textContent = "Shields set: " + foe.shields.length;
+  // element lock on me
+  myLock = me.lock; renderBases();
+  if (me.lock) $("lockwarn").textContent = `⚠ ${me.lock.el} locked!`; else $("lockwarn").textContent="";
+  if (log){ const d=document.createElement("div"); d.textContent=log; $("log").prepend(d); }
+}
+
+// ---- crafting ----
+let myLock = null;
+function locked(el){ return myLock && myLock.el === el && myLock.until > Date.now(); }
+function renderBases(){
+  $("bases").innerHTML = "";
+  for (const [el,em] of Object.entries(BASE)){
+    const b = document.createElement("button");
+    b.className = "base" + (locked(el) ? " locked":"");
+    b.innerHTML = `<span>${em}</span><small>${el}</small>`;
+    b.onclick = () => addToSlot(el);
+    $("bases").appendChild(b);
+  }
+}
+function addToSlot(el){
+  const i = slots[0]===null?0 : slots[1]===null?1 : 0;
+  if (i===0) slots=[el,null]; else slots[1]=el;
+  renderSlots();
+  if (slots[0] && slots[1]) craft();
+}
+function renderSlots(){
+  $("s0").textContent = slots[0]?EMO(slots[0]):""; $("s0").className="slot"+(slots[0]?" full":"");
+  $("s1").textContent = slots[1]?EMO(slots[1]):""; $("s1").className="slot"+(slots[1]?" full":"");
+}
+$("s0").onclick = () => { slots=[slots[1],null]; renderSlots(); };
+$("s1").onclick = () => { slots[1]=null; renderSlots(); };
+
+function craft(){
+  const now = Date.now();
+  const a = slots[0], b = slots[1];
+  const id = RECIPE[[a,b].sort().join("+")];
+  const clear = () => { slots=[null,null]; renderSlots(); };
+  if (now < cooldownUntil){ $("hint").textContent="Still recharging…"; flash(); clear(); return; }
+  // crafted ingredients must be in your inventory (bases are unlimited)
+  const need = {};
+  [a,b].forEach(x => { if (!BASE[x]) need[x] = (need[x]||0)+1; });
+  for (const k in need){
+    if ((inv[k]||0) < need[k]){ $("hint").textContent=`Not enough ${CARDS[k].name}.`; flash(); clear(); return; }
+  }
+  if (!id){ $("hint").textContent="Those two make nothing."; flash(); clear(); return; }
+  for (const k in need) inv[k] -= need[k];   // consume ingredients
+  inv[id] = (inv[id]||0) + 1;                // gain the new element
+  $("hint").textContent = `Crafted ${CARDS[id].name}!`;
+  cooldownUntil = now + CD_MS;
+  clear(); renderInv();
+}
+function flash(){ $("craft").classList.add("shake"); setTimeout(()=>$("craft").classList.remove("shake"),300); }
+
+// cooldown bar
+setInterval(() => {
+  const left = cooldownUntil - Date.now();
+  $("cd").style.transform = "scaleX(" + (left>0 ? 1-left/CD_MS : 1) + ")";
+}, 50);
+
+// ---- inventory: crafted elements you own (click to advance, button to deploy) ----
+function renderInv(){
+  const h = $("hand");
+  const ids = Object.keys(inv).filter(k => inv[k] > 0);
+  if (!ids.length){ h.innerHTML = `<div class="emptyhand">No elements yet. Combine two above — crafted elements land here to advance further or deploy.</div>`; return; }
+  h.innerHTML = "";
+  ids.forEach(id => {
+    const c = CARDS[id];
+    const el = document.createElement("div");
+    el.className = "card " + c.kind;
+    el.title = "Click to add to the combiner";
+    el.innerHTML = `<span class="em">${c.em}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
+    el.onclick = (e) => { if (e.target.tagName !== "BUTTON") addToSlot(id); };  // advance
+    if (c.kind === "attack" || c.kind === "shield" || c.kind === "curse"){
+      const btn = document.createElement("button");
+      btn.textContent = c.kind==="attack" ? "Attack" : c.kind==="shield" ? "Set shield" : "Cast";
+      btn.onclick = () => deploy(id);
+      el.appendChild(btn);
+    }
+    h.appendChild(el);
+  });
+}
+function deploy(id){
+  const c = CARDS[id];
+  if (!ws || ws.readyState!==1 || !(inv[id] > 0)) return;
+  if (c.kind==="attack") ws.send(JSON.stringify({ type:"attack", card:id }));
+  else if (c.kind==="shield") ws.send(JSON.stringify({ type:"shield", card:id }));
+  else if (c.kind==="curse") ws.send(JSON.stringify({ type:"curse" }));
+  inv[id]--; renderInv(); // consumed
+}
+</script>
+</body>
+</html>

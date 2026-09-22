@@ -1,0 +1,8 @@
+# Optional: lets Render auto-configure via "New + → Blueprint" instead of the manual UI steps.
+services:
+  - type: web
+    name: elemental-duel
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
