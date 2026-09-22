@@ -27,6 +27,7 @@ const START_HP = 30;
 const LOCK_MS = 6000;
 const AP_CAP = 5;
 const apFor = (round) => Math.min(AP_CAP, round + 1); // mana curve: round 1 = 2 AP, +1 per round, capped
+const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
 const ATTACKS = { // card id -> effect
   firebolt: { dmg: 6, counter: "ward" },
   meteor:   { dmg: 12, counter: "planet" },
@@ -60,7 +61,7 @@ function addPlayer(ws, room, name) {
   if (room.players.length === 2) {
     room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
     room.round = 1;
-    broadcast(room, { type: "start", players: stateOf(room), round: room.round, ap: apFor(room.round) });
+    beginRound(room, "start");
   } else {
     send(ws, { type: "waiting" });
   }
@@ -84,6 +85,7 @@ function botPlan(room, bot) {
 
 // --- simultaneous resolution: both plans revealed and applied together, then the next round opens ---
 function resolveRound(room) {
+  clearTimeout(room.timer);
   const [A, B] = room.players;
   const logs = [];
   const of = (p, kind) => (p.plan && p.plan.deploys || []).filter((d) => d.k === kind);
@@ -110,7 +112,17 @@ function resolveRound(room) {
 function nextRound(room) {
   room.players.forEach((p) => { p.plan = null; p.ready = false; });
   room.round++;
-  setTimeout(() => { if (rooms.get(room.code)) broadcast(room, { type: "round", players: stateOf(room), round: room.round, ap: apFor(room.round) }); }, 1600);
+  setTimeout(() => { if (rooms.get(room.code)) beginRound(room, "round"); }, 1600);
+}
+function beginRound(room, type) {
+  broadcast(room, { type, players: stateOf(room), round: room.round, ap: apFor(room.round), seconds: ROUND_SECONDS });
+  clearTimeout(room.timer);
+  room.timer = setTimeout(() => forceResolve(room), (ROUND_SECONDS + 2) * 1000); // safety net if a client never answers
+}
+function forceResolve(room) {
+  if (room.players.length < 2) return;
+  room.players.forEach((p) => { if (!p.ready) { if (p.isBot) botPlan(room, p); else { p.plan = p.plan || { deploys: [] }; p.ready = true; } } });
+  resolveRound(room);
 }
 
 wss.on("connection", (ws) => {
@@ -149,7 +161,7 @@ wss.on("connection", (ws) => {
       room.players.push(bot); // slot 1
       room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
       room.round = 1;
-      broadcast(room, { type: "start", players: stateOf(room), round: room.round, ap: apFor(room.round) });
+      beginRound(room, "start");
       return;
     }
 
@@ -171,6 +183,7 @@ wss.on("connection", (ws) => {
     if (waiting && waiting.ws === ws) waiting = null;
     const room = ws.room;
     if (!room) return;
+    clearTimeout(room.timer);
     if (room.bot) { rooms.delete(room.code); return; } // human left a bot match; pending bot timeouts no-op
     room.players = room.players.filter((p) => p !== ws.me);
     if (room.players.length === 0) rooms.delete(room.code);

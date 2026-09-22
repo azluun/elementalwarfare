@@ -64,6 +64,8 @@ no turn order, so there's no first-strike advantage. AP ramps each round
 late rounds swing hard.
 
 - **Craft = 1 AP, stage a card = 1 AP.** Spend up to your AP, then **Ready**.
+- **A round clock (30s)** stops stalling: at 0 your current plan is auto-submitted,
+  and a server-side net resolves the round even if a client vanishes entirely.
 - **Bases** 🔥💧🌍💨 are always available. Combine two → the result lands in your
   **inventory** as an element you own (carries across rounds).
 - **Advance**: click an owned element to drop it back into the combiner — deeper

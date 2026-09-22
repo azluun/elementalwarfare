@@ -70,7 +70,8 @@
   .turnbar{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
     border-radius:12px;padding:8px 12px;font-weight:700}
   .turnbar.mine{border-color:var(--accent)} .turnbar.theirs{opacity:.7}
-  #turnmsg{flex:1} .turnbar.mine #turnmsg{color:var(--you)} .turnbar.theirs #turnmsg{color:var(--soft)}
+  #roundmsg{flex:1} .turnbar.mine #roundmsg{color:var(--you)} .turnbar.theirs #roundmsg{color:var(--soft)}
+  #timer{font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--soft)}
   .apdots{display:flex;gap:4px}
   .apdots span{width:12px;height:12px;border-radius:50%;background:var(--line)}
   .apdots span.on{background:var(--amber)}
@@ -153,6 +154,7 @@
 
     <div class="turnbar" id="turnbar">
       <span id="roundmsg">Round 1</span>
+      <span id="timer"></span>
       <span class="apdots" id="apdots"></span>
       <button id="ready">Ready</button>
     </div>
@@ -274,6 +276,7 @@ function newRound(m){
   if (round > 1) addLog(`— Round ${round} · ${apBudget} AP —`);
   slots = [null,null]; renderSlots();
   updateUI();
+  startTimer(m.seconds);
 }
 function applyPlayers(players){
   const me = players[myslot], foe = players[1-myslot];
@@ -392,12 +395,34 @@ function unstage(idx){
   plan.splice(idx,1);
   updateUI();
 }
-$("ready").onclick = () => {
+function doReady(){
   if (locked || !ws || ws.readyState!==1) return;
   locked = true;
   ws.send(JSON.stringify({ type:"plan", deploys: plan.map(d=>({ k:d.k, card:d.card })) }));
+  renderTimer();
   updateUI();
-};
+}
+$("ready").onclick = doReady;
+
+// ---- round countdown: auto-submits your current plan at 0 so nobody can stall ----
+let timerInt = null, secsLeft = 0;
+function startTimer(seconds){
+  clearInterval(timerInt);
+  secsLeft = seconds || 30;
+  renderTimer();
+  timerInt = setInterval(() => {
+    if (locked){ clearInterval(timerInt); return; }
+    secsLeft--;
+    renderTimer();
+    if (secsLeft <= 0){ clearInterval(timerInt); doReady(); }
+  }, 1000);
+}
+function renderTimer(){
+  const t = $("timer");
+  if (locked || secsLeft < 0){ t.textContent = ""; return; }
+  t.textContent = `⏱ 0:${String(Math.max(0, secsLeft)).padStart(2, "0")}`;
+  t.style.color = secsLeft <= 5 ? "var(--foe)" : "var(--soft)";
+}
 </script>
 </body>
 </html>
