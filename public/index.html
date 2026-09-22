@@ -101,6 +101,7 @@
   <div class="lobby" id="lobby">
     <div><label for="name">Your name</label><input id="name" maxlength="16" placeholder="e.g. username"></div>
     <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
+    <button id="bot" style="padding:11px;font-size:14px">🤖 Play vs Bot</button>
     <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
     <div><label for="room">Room code</label><input id="room" maxlength="6" placeholder="you will see your code here" style="text-transform:uppercase"></div>
     <div class="row">
@@ -202,6 +203,7 @@ function openSocket(firstMsg){
 }
 function connect(room){ quick = false; openSocket((name)=>({ type:"join", room, name })); showInvite(room); }
 function quickmatch(){ quick = true; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name })); }
+function botmatch(){ quick = true; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name })); }
 function showInvite(room){
   const url = location.origin + location.pathname + "?room=" + room;
   $("invitelink").textContent = url;
@@ -209,6 +211,7 @@ function showInvite(room){
   $("roomtag").textContent = "Room " + room;
 }
 $("quick").onclick = quickmatch;
+$("bot").onclick = botmatch;
 $("create").onclick = () => { const c = randCode(); $("room").value = c; connect(c); };
 $("joinbtn").onclick = () => {
   const c = ($("room").value || "").toUpperCase().replace(/[^A-Z0-9]/g,"");
