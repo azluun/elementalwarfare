@@ -136,4 +136,5 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(PORT, () => console.log(`\n  Elemental Duel running:  http://localhost:${PORT}\n`));
+// bind 0.0.0.0 so hosts like Render detect the open port (default bind is IPv6-only)
+server.listen(PORT, "0.0.0.0", () => console.log(`Elemental Duel listening on 0.0.0.0:${PORT}`));
