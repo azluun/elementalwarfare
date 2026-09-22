@@ -57,23 +57,27 @@ your room, and the duel starts when you're both in.
 
 ## How a match works
 
-**Turn-based, 3 action points per turn.** Craft = 1 AP, deploy = 1 AP. Spend up to
-3, then **End turn** (or it auto-ends at 0 AP) and your opponent goes. Your
-inventory carries across turns, so you can build a big card over two turns.
+**Simultaneous rounds with a mana curve.** Each round both players *secretly* plan
+their action points, hit **Ready**, and both plans reveal and resolve **at once** —
+no turn order, so there's no first-strike advantage. AP ramps each round
+(round 1 = 2 AP, +1 per round, capped at 5), so early rounds are for building and
+late rounds swing hard.
 
+- **Craft = 1 AP, stage a card = 1 AP.** Spend up to your AP, then **Ready**.
 - **Bases** 🔥💧🌍💨 are always available. Combine two → the result lands in your
-  **inventory** as an element you own.
+  **inventory** as an element you own (carries across rounds).
 - **Advance**: click an owned element to drop it back into the combiner — deeper
-  cards need intermediates (Lava, Energy, Mud, Steam, Mountain). Combining spends
-  the ingredients (and 1 AP).
-- **Deploy** (1 AP): an element with a role has a button — **Attack**, **Set
-  shield**, or **Cast** — which spends one from your inventory.
-- **Shields** wait in your defense and eat the one attack they counter, then they're
-  spent. **Curse** 🌀 locks a random enemy element for 6s.
-- First to 0 HP (of 30) loses.
+  cards need intermediates (Lava, Energy, Mud, Steam, Mountain).
+- **Stage** (1 AP): Attack / Shield / Curse go into your hidden plan for this round
+  (click the ✕ to cancel before you Ready).
+- On reveal: **shields brace first**, then attacks land — so a shield you stage this
+  round can block an attack thrown this round. Both sides' attacks land together
+  (mutual damage is possible). **Curse** 🌀 locks a random enemy element for 6s.
+- First to 0 HP (of 30) loses. Both to 0 in the same round = a draw.
 
-A big attack costs a whole turn: Meteor = craft Lava + craft Meteor + Attack = 3 AP.
-A cheap Storm = craft Storm + Attack = 2 AP, leaving 1 AP to start crafting your next.
+Since you can't see their plan, the counter chart becomes a read: *will they Meteor?
+stage Planet.* A big attack still costs its whole build (Meteor = Lava + Meteor +
+Attack = 3 AP), so you commit a round to it and hope it isn't blocked.
 
 Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a step up:
 
@@ -95,7 +99,7 @@ Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a s
 
 ## Tweak it
 
-- **Damage, HP, action points, lock time, counters** → top of `server.js` (`START_HP`, `TURN_AP`, `ATTACKS`, `LOCK_MS`, `BOT_COSTS`). Server is authoritative, so this is the real balance.
+- **Damage, HP, the mana curve, lock time, counters** → top of `server.js` (`START_HP`, `AP_CAP`, `apFor`, `ATTACKS`, `LOCK_MS`, `BOT_COSTS`). Server is authoritative, so this is the real balance.
 - **Recipes, card art/text** → `CARDS` in `public/index.html`.
 - Keep the two `ATTACKS`/`CARDS` tables in sync when you add a card.
 

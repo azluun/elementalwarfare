@@ -25,7 +25,8 @@ const server = http.createServer((req, res) => {
 // --- authoritative combat rules (client mirrors these for its own UI) ---
 const START_HP = 30;
 const LOCK_MS = 6000;
-const TURN_AP = 3; // action points per turn: craft = 1, deploy = 1
+const AP_CAP = 5;
+const apFor = (round) => Math.min(AP_CAP, round + 1); // mana curve: round 1 = 2 AP, +1 per round, capped
 const ATTACKS = { // card id -> effect
   firebolt: { dmg: 6, counter: "ward" },
   meteor:   { dmg: 12, counter: "planet" },
@@ -49,7 +50,7 @@ function stateOf(room) {
   }));
 }
 function pushState(room, log) {
-  broadcast(room, { type: "state", players: stateOf(room), turn: room.turn, ap: room.ap, log });
+  broadcast(room, { type: "state", players: stateOf(room), log });
 }
 function addPlayer(ws, room, name) {
   const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null };
@@ -57,68 +58,59 @@ function addPlayer(ws, room, name) {
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
   if (room.players.length === 2) {
-    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; });
-    room.turn = 0; room.ap = TURN_AP;
-    broadcast(room, { type: "start", players: stateOf(room), turn: room.turn, ap: room.ap });
+    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
+    room.round = 1;
+    broadcast(room, { type: "start", players: stateOf(room), round: room.round, ap: apFor(room.round) });
   } else {
     send(ws, { type: "waiting" });
   }
 }
 
-// --- combat actions, shared by the ws message handler and the bot driver ---
-function resolveAttack(room, me, cardId) {
-  const a = ATTACKS[cardId];
-  const opp = room.players.find((p) => p !== me);
-  if (!a || !opp || me.hp <= 0 || opp.hp <= 0) return;
-  const i = opp.shields.indexOf(a.counter);
-  let log;
-  if (i >= 0) { opp.shields.splice(i, 1); log = `🛡️ ${opp.name} blocked ${me.name}'s ${cardId}!`; }
-  else { opp.hp = Math.max(0, opp.hp - a.dmg); log = `💥 ${me.name}'s ${cardId} hit ${opp.name} for ${a.dmg}`; }
-  pushState(room, log);
-  if (opp.hp <= 0) broadcast(room, { type: "over", winner: me.name });
-}
-function resolveShield(room, me, cardId) {
-  if (me.hp <= 0) return;
-  me.shields.push(cardId);
-  pushState(room, `${me.name} raised a shield`);
-}
-function resolveCurse(room, me) {
-  const opp = room.players.find((p) => p !== me);
-  if (!opp || me.hp <= 0 || opp.hp <= 0) return;
-  const el = ["fire", "water", "earth", "air"][(Math.random() * 4) | 0];
-  opp.lock = { el, until: Date.now() + LOCK_MS };
-  pushState(room, `🌀 ${me.name} cursed ${opp.name}'s ${el}!`);
-}
-
-// --- turns: server owns whose turn it is and how many action points remain ---
-function endTurn(room) {
-  if (room.players.length < 2) return;
-  if (!room.players.every((p) => p.hp > 0)) return; // match already decided
-  room.turn = 1 - room.turn;
-  room.ap = TURN_AP;
-  pushState(room, `— ${room.players[room.turn].name}'s turn —`);
-  const cur = room.players[room.turn];
-  if (cur.isBot) botTurn(room, cur);
-}
-
-// --- AI bot: plays out its own 3-AP turn. Each card "costs" what a human pays to craft + deploy it. ---
+// --- bot: builds a plan for the round out of its AP budget (each card costs craft + deploy) ---
 const BOT_COSTS = { storm: 2, ward: 2, mountain: 2, curse: 2, firebolt: 3, meteor: 3, plague: 3, planet: 3, life: 3 };
-function botTurn(room, bot) {
-  let ap = TURN_AP;
-  const step = () => {
-    const human = room.players.find((p) => p !== bot);
-    if (!human || bot.hp <= 0 || human.hp <= 0) return;         // match over
-    const affordable = Object.keys(BOT_COSTS).filter((c) => BOT_COSTS[c] <= ap);
-    if (!affordable.length) return endTurn(room);
-    const card = affordable[(Math.random() * affordable.length) | 0];
-    ap -= BOT_COSTS[card];
-    if (ATTACKS[card]) resolveAttack(room, bot, card);
-    else if (card === "curse") resolveCurse(room, bot);
-    else resolveShield(room, bot, card);                        // ward / mountain / planet / life
-    if (bot.hp <= 0 || human.hp <= 0) return;
-    setTimeout(step, 700); // ponytail: pauses so the human can read each bot move; picks are random-affordable, not strategic
-  };
-  setTimeout(step, 700);
+function botPlan(room, bot) {
+  const deploys = []; let rem = apFor(room.round);
+  while (true) {
+    const aff = Object.keys(BOT_COSTS).filter((c) => BOT_COSTS[c] <= rem);
+    if (!aff.length) break;
+    const card = aff[(Math.random() * aff.length) | 0];
+    rem -= BOT_COSTS[card];
+    if (ATTACKS[card]) deploys.push({ k: "attack", card });
+    else if (card === "curse") deploys.push({ k: "curse" });
+    else deploys.push({ k: "shield", card });
+  }
+  bot.plan = { deploys }; bot.ready = true; // ponytail: random-affordable, not strategic
+}
+
+// --- simultaneous resolution: both plans revealed and applied together, then the next round opens ---
+function resolveRound(room) {
+  const [A, B] = room.players;
+  const logs = [];
+  const of = (p, kind) => (p.plan && p.plan.deploys || []).filter((d) => d.k === kind);
+  // 1) shields go up first, so a shield played this round can block an attack played this round
+  for (const p of [A, B]) for (const d of of(p, "shield")) { p.shields.push(d.card); logs.push(`🛡️ ${p.name} braces ${d.card}`); }
+  // 2) curses
+  for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "curse")) {
+    const el = ["fire", "water", "earth", "air"][(Math.random() * 4) | 0];
+    opp.lock = { el, until: Date.now() + LOCK_MS };
+    logs.push(`🌀 ${me.name} curses ${opp.name}'s ${el}`);
+  }
+  // 3) attacks — both sides land at once (no turn order, so no first-strike edge)
+  for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "attack")) {
+    const a = ATTACKS[d.card]; if (!a) continue;
+    const i = opp.shields.indexOf(a.counter);
+    if (i >= 0) { opp.shields.splice(i, 1); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
+    else { opp.hp = Math.max(0, opp.hp - a.dmg); logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`); }
+  }
+  broadcast(room, { type: "resolve", players: stateOf(room), logs });
+  const aDead = A.hp <= 0, bDead = B.hp <= 0;
+  if (aDead || bDead) return broadcast(room, { type: "over", winner: aDead && bDead ? null : (aDead ? B.name : A.name) });
+  nextRound(room);
+}
+function nextRound(room) {
+  room.players.forEach((p) => { p.plan = null; p.ready = false; });
+  room.round++;
+  setTimeout(() => { if (rooms.get(room.code)) broadcast(room, { type: "round", players: stateOf(room), round: room.round, ap: apFor(room.round) }); }, 1600);
 }
 
 wss.on("connection", (ws) => {
@@ -155,24 +147,24 @@ wss.on("connection", (ws) => {
       addPlayer(ws, room, m.name); // human = slot 0
       const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], lock: null, isBot: true };
       room.players.push(bot); // slot 1
-      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; });
-      room.turn = 0; room.ap = TURN_AP; // human (slot 0) goes first
-      broadcast(room, { type: "start", players: stateOf(room), turn: room.turn, ap: room.ap });
+      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
+      room.round = 1;
+      broadcast(room, { type: "start", players: stateOf(room), round: room.round, ap: apFor(room.round) });
       return;
     }
 
     const room = ws.room, me = ws.me;
     if (!room || !me) return;
     const opp = room.players.find((p) => p !== me);
-    if (!opp || me.hp <= 0 || opp.hp <= 0) return;     // match not live
-    if (room.turn !== room.players.indexOf(me)) return; // not your turn
+    if (!opp || me.hp <= 0 || opp.hp <= 0) return; // match not live
 
-    if (m.type === "endturn") return endTurn(room);
-    if (room.ap <= 0) return;                            // out of action points
-    if (m.type === "craft")  { room.ap--; pushState(room, null); if (room.ap <= 0) endTurn(room); return; }
-    if (m.type === "shield") { room.ap--; resolveShield(room, me, m.card); if (room.ap <= 0) endTurn(room); return; }
-    if (m.type === "attack") { room.ap--; resolveAttack(room, me, m.card); if (room.ap <= 0) endTurn(room); return; }
-    if (m.type === "curse")  { room.ap--; resolveCurse(room, me);          if (room.ap <= 0) endTurn(room); return; }
+    if (m.type === "plan") {
+      if (me.ready) return;                        // already locked in this round
+      me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
+      me.ready = true;
+      if (opp.isBot) botPlan(room, opp);
+      if (room.players.every((p) => p.ready)) resolveRound(room);
+    }
   });
 
   ws.on("close", () => {
