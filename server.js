@@ -87,24 +87,26 @@ function botPlan(room, bot) {
 function resolveRound(room) {
   clearTimeout(room.timer);
   const [A, B] = room.players;
-  const logs = [];
+  const slot = (p) => (p === A ? 0 : 1);
+  const logs = [], events = []; // events drive the client reveal animation
   const of = (p, kind) => (p.plan && p.plan.deploys || []).filter((d) => d.k === kind);
   // 1) shields go up first, so a shield played this round can block an attack played this round
-  for (const p of [A, B]) for (const d of of(p, "shield")) { p.shields.push(d.card); logs.push(`🛡️ ${p.name} braces ${d.card}`); }
+  for (const p of [A, B]) for (const d of of(p, "shield")) { p.shields.push(d.card); events.push({ t: "shield", who: slot(p), card: d.card }); logs.push(`🛡️ ${p.name} braces ${d.card}`); }
   // 2) curses
   for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "curse")) {
     const el = ["fire", "water", "earth", "air"][(Math.random() * 4) | 0];
     opp.lock = { el, until: Date.now() + LOCK_MS };
+    events.push({ t: "curse", who: slot(me), el });
     logs.push(`🌀 ${me.name} curses ${opp.name}'s ${el}`);
   }
   // 3) attacks — both sides land at once (no turn order, so no first-strike edge)
   for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "attack")) {
     const a = ATTACKS[d.card]; if (!a) continue;
     const i = opp.shields.indexOf(a.counter);
-    if (i >= 0) { opp.shields.splice(i, 1); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
-    else { opp.hp = Math.max(0, opp.hp - a.dmg); logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`); }
+    if (i >= 0) { opp.shields.splice(i, 1); events.push({ t: "attack", who: slot(me), card: d.card, blocked: true, dmg: a.dmg }); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
+    else { opp.hp = Math.max(0, opp.hp - a.dmg); events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg }); logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`); }
   }
-  broadcast(room, { type: "resolve", players: stateOf(room), logs });
+  broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
   if (aDead || bDead) return broadcast(room, { type: "over", winner: aDead && bDead ? null : (aDead ? B.name : A.name) });
   nextRound(room);
@@ -112,7 +114,7 @@ function resolveRound(room) {
 function nextRound(room) {
   room.players.forEach((p) => { p.plan = null; p.ready = false; });
   room.round++;
-  setTimeout(() => { if (rooms.get(room.code)) beginRound(room, "round"); }, 1600);
+  setTimeout(() => { if (rooms.get(room.code)) beginRound(room, "round"); }, 2800); // leave room for the reveal animation
 }
 function beginRound(room, type) {
   broadcast(room, { type, players: stateOf(room), round: room.round, ap: apFor(room.round), seconds: ROUND_SECONDS });

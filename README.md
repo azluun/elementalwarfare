@@ -72,14 +72,21 @@ late rounds swing hard.
   cards need intermediates (Lava, Energy, Mud, Steam, Mountain).
 - **Stage** (1 AP): Attack / Shield / Curse go into your hidden plan for this round
   (click the ✕ to cancel before you Ready).
-- On reveal: **shields brace first**, then attacks land — so a shield you stage this
-  round can block an attack thrown this round. Both sides' attacks land together
-  (mutual damage is possible). **Curse** 🌀 locks a random enemy element for 6s.
+- **The reveal is animated**: both plans flip face-up, then each attack plays out —
+  shields brace first (so a shield staged this round blocks an attack thrown this
+  round), then attacks land blow by blow with damage pops and HP ticking down. Both
+  sides' attacks land together (mutual damage is possible). **Curse** 🌀 locks a
+  random enemy element for 6s.
 - First to 0 HP (of 30) loses. Both to 0 in the same round = a draw.
 
 Since you can't see their plan, the counter chart becomes a read: *will they Meteor?
 stage Planet.* A big attack still costs its whole build (Meteor = Lava + Meteor +
 Attack = 3 AP), so you commit a round to it and hope it isn't blocked.
+
+**Discovery.** You learn recipes by crafting them. The in-match **📖 Guide** shows
+only the recipes you've crafted before (saved per browser), with the rest as
+"🔒 undiscovered". The lobby's **📖 Recipe Book** is the full reference — every
+recipe and counter, spoilers and all.
 
 Two-tier tree — the same element (e.g. Mountain) is either a shield **or** a step up:
 

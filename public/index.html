@@ -103,7 +103,43 @@
 
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
   .shake{animation:shake .3s}
-  .over{position:fixed;inset:0;background:rgba(8,10,7,.86);display:none;align-items:center;justify-content:center;padding:20px}
+  /* reveal animation */
+  .reveal{position:fixed;inset:0;background:rgba(8,10,7,.82);display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:12px;padding:20px;z-index:20}
+  .reveal.show{display:flex}
+  .reveal.hitshake{animation:shake .32s}
+  .rv-side{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;max-width:520px}
+  .rv-name{font-weight:700;font-size:14px}
+  .rv-name.foe{color:var(--foe)} .rv-name.me{color:var(--you)}
+  .rv-hp{font-family:var(--dsp);font-size:26px;font-variant-numeric:tabular-nums;transition:color .2s}
+  .rv-cards{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:74px}
+  .rv-card{width:66px;height:70px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    opacity:0;transform:rotateY(90deg);transition:transform .35s,opacity .35s}
+  .rv-card.up{opacity:1;transform:rotateY(0)}
+  .rv-card .em{font-size:26px;line-height:1} .rv-card .nm{font-size:10px;font-weight:700;text-align:center}
+  .rv-card.attack{border-color:var(--foe)} .rv-card.shield{border-color:var(--shield)} .rv-card.curse{border-color:var(--amber)}
+  .rv-mid{min-height:44px;display:flex;align-items:center;justify-content:center;
+    font-family:var(--dsp);font-size:20px;font-weight:600;text-align:center;padding:0 10px}
+  .rv-mid .blk{color:var(--shield)} .rv-mid .hit{color:var(--foe)}
+  @keyframes floatup{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-46px)}}
+  .dmgfloat{position:absolute;left:50%;top:6px;font-family:var(--dsp);font-weight:700;font-size:28px;
+    color:var(--foe);animation:floatup .8s ease-out forwards;pointer-events:none}
+  .over{position:fixed;inset:0;background:rgba(8,10,7,.86);display:none;align-items:center;justify-content:center;padding:20px;z-index:21}
+  /* cheat sheet / recipe book */
+  .sheet{position:fixed;inset:0;background:rgba(8,10,7,.86);display:flex;align-items:center;justify-content:center;padding:16px;z-index:25}
+  .sheet[hidden]{display:none}
+  .sheetbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:460px;width:100%;max-height:86vh;overflow-y:auto;padding:16px}
+  .sheethead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;position:sticky;top:-16px;background:var(--panel);padding-top:2px}
+  .sheethead b{font-family:var(--dsp);font-size:18px}
+  .sheethead button{background:var(--panel2);padding:4px 10px}
+  .sheet h3{font-family:var(--dsp);font-size:13px;color:var(--soft);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+  .crow{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}
+  .crow .a{color:var(--foe);font-weight:600;flex:1} .crow .s{color:var(--shield);font-weight:600}
+  .crow .arrow{color:var(--soft)}
+  .rrow{font-size:13px;padding:4px 0;border-bottom:1px solid var(--line)}
+  .rrow .r{color:var(--soft)}
+  .sheetnote{font-size:12px;color:var(--soft);margin-top:12px}
   .over .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center;max-width:320px}
   .over h2{font-family:var(--dsp);margin:0 0 8px;font-size:28px}
   .chart{font-size:11px;color:var(--soft);text-align:center;margin-top:4px}
@@ -111,9 +147,12 @@
 </head>
 <body>
 <div class="wrap">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
-    <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
+      <button id="guide" style="padding:5px 10px;font-size:12px">📖 Guide</button>
+    </div>
   </div>
 
   <!-- LOBBY -->
@@ -132,7 +171,7 @@
       Send this link to your friend:
       <code id="invitelink"></code>
     </div>
-    <div class="chart">Craft intermediates (Lava · Energy · Mud · Steam · Mountain) to reach the big cards.<br>Counters: Firebolt↔Ward · Meteor↔Planet · Storm↔Mountain · Plague↔Life · Curse locks an element</div>
+    <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
   </div>
 
   <!-- ARENA -->
@@ -172,6 +211,15 @@
   </div>
 </div>
 
+<div class="reveal" id="reveal"></div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheetbox">
+    <div class="sheethead"><b id="sheettitle">Recipes</b><button id="sheetclose">✕</button></div>
+    <div id="sheetbody"></div>
+  </div>
+</div>
+
 <div class="over" id="over"><div class="box">
   <h2 id="overtitle">—</h2>
   <p id="oversub" style="color:var(--soft)"></p>
@@ -190,10 +238,10 @@ const CARDS = {
   energy:  {em:"⚡",name:"Energy",kind:"item",  recipe:["fire","air"],   info:"ingredient → Firebolt, Plague"},
   mud:     {em:"🟤",name:"Mud",   kind:"item",  recipe:["water","earth"],info:"ingredient → Plague"},
   // -- attacks --
-  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, recipe:["water","air"],  info:"8 dmg · blocked by Mountain"},
-  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, recipe:["energy","fire"],info:"6 dmg · blocked by Ward"},
-  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:12,recipe:["lava","fire"],  info:"12 dmg · blocked by Planet"},
-  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:10,recipe:["mud","energy"], info:"10 dmg · blocked by Life"},
+  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, counter:"mountain",recipe:["water","air"],  info:"8 dmg · blocked by Mountain"},
+  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, counter:"ward",    recipe:["energy","fire"],info:"6 dmg · blocked by Ward"},
+  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:12,counter:"planet",  recipe:["lava","fire"],  info:"12 dmg · blocked by Planet"},
+  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:10,counter:"life",    recipe:["mud","energy"], info:"10 dmg · blocked by Life"},
   // -- shields (Mountain also advances into Planet) --
   mountain:{em:"⛰️",name:"Mountain",kind:"shield",recipe:["earth","air"],    info:"blocks Storm · or craft Planet"},
   ward:    {em:"💧",name:"Water Ward",kind:"shield",recipe:["water","water"],info:"blocks Firebolt"},
@@ -213,6 +261,15 @@ if (params.get("room")) $("room").value = params.get("room").toUpperCase();
 $("name").value = localStorage.getItem("duel.name") || "";
 
 let ws, myslot = 0, inv = {}, slots = [null,null];
+
+// recipes you've crafted at least once — persists across games (per browser)
+let discovered = new Set();
+try { const d = JSON.parse(localStorage.getItem("duel.discovered")); if (Array.isArray(d)) discovered = new Set(d); } catch(e){}
+function discover(id){
+  if (discovered.has(id)) return;
+  discovered.add(id);
+  try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
+}
 
 function randCode(){ let s=""; for(let i=0;i<4;i++) s+="ABCDEFGHJKLMNPQRSTUVWXYZ"[(Math.random()*24)|0]; return s; }
 
@@ -252,23 +309,26 @@ function handle(m){
   if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
   if (m.type === "left")    { $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
   if (m.type === "start")   { enterArena(); newRound(m); }
-  if (m.type === "round")   { newRound(m); }
-  if (m.type === "resolve") { applyPlayers(m.players); (m.logs||[]).forEach(addLog); $("roundmsg").textContent = "Revealed!"; }
-  if (m.type === "over"){
-    const meName = ($("name").value || "Player").trim();
-    const draw = m.winner === null, won = m.winner === meName;
-    $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
-    $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
-    $("over").style.display = "flex";
-  }
+  if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
+  if (m.type === "resolve") { startReveal(m); }
+  if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
+}
+function showOver(m){
+  const meName = ($("name").value || "Player").trim();
+  const draw = m.winner === null, won = m.winner === meName;
+  $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
+  $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
+  $("over").style.display = "flex";
 }
 function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; }
 function addLog(t){ const d=document.createElement("div"); d.textContent=t; $("log").prepend(d); }
 
 // ---- round / plan state ----
 let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myLock = null;
+let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent";
 const apLeft = () => apBudget - apSpent;
 const canAct = () => !locked && apLeft() > 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function newRound(m){
   round = m.round; apBudget = m.ap; apSpent = 0; plan = []; locked = false;
@@ -287,6 +347,8 @@ function applyPlayers(players){
   $("foeshields").textContent = "Shields: " + foe.shields.length;
   myLock = me.lock;
   $("lockwarn").textContent = me.lock ? `⚠ ${me.lock.el} locked!` : "";
+  shownHp = [players[0].hp, players[1].hp];
+  foeName = foe.name;
 }
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
@@ -339,6 +401,7 @@ function craft(){
   if (!id){ $("hint").textContent="Those two make nothing."; flash(); clear(); return; }
   for (const k in need) inv[k] -= need[k];   // consume ingredients
   inv[id] = (inv[id]||0) + 1;                // gain the new element
+  discover(id);                              // remember this recipe for your Guide
   apSpent++;
   $("hint").textContent = `Crafted ${CARDS[id].name}! (−1 AP)`;
   clear(); updateUI();
@@ -423,6 +486,112 @@ function renderTimer(){
   t.textContent = `⏱ 0:${String(Math.max(0, secsLeft)).padStart(2, "0")}`;
   t.style.color = secsLeft <= 5 ? "var(--foe)" : "var(--soft)";
 }
+
+// ---- the reveal: both plans flip up, then attacks resolve blow by blow ----
+const sideName = (slot) => slot === myslot ? "You" : foeName;
+function dmgFloat(slot, dmg){
+  const s = document.getElementById("rvside" + slot); if (!s) return;
+  const f = document.createElement("div"); f.className = "dmgfloat"; f.textContent = "−" + dmg;
+  s.appendChild(f); setTimeout(() => f.remove(), 820);
+}
+async function startReveal(m){
+  const events = m.events || [];
+  const finish = () => {
+    animating = false;
+    applyPlayers(m.players); (m.logs || []).forEach(addLog);
+    if (pendingOver){ const o = pendingOver; pendingOver = null; showOver(o); }
+    else if (pendingRound){ const r = pendingRound; pendingRound = null; newRound(r); }
+  };
+  if (!events.length){ finish(); return; } // both sides did nothing — no drama to show
+  animating = true;
+
+  const R = $("reveal");
+  const foeSlot = 1 - myslot, meSlot = myslot;
+  const hand = { 0: [], 1: [] };
+  events.forEach((e) => {
+    if (e.t === "shield") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "shield" });
+    else if (e.t === "attack") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "attack" });
+    else if (e.t === "curse") hand[e.who].push({ em: "🌀", nm: "Curse", k: "curse" });
+  });
+  const hp = [shownHp[0], shownHp[1]];
+  const sideHTML = (slot, cls, label) =>
+    `<div class="rv-side" id="rvside${slot}"><div class="rv-name ${cls}">${label}</div>` +
+    `<div class="rv-hp" id="rvhp${slot}">${hp[slot]}</div><div class="rv-cards" id="rvcards${slot}"></div></div>`;
+  R.innerHTML = sideHTML(foeSlot, "foe", foeName) + `<div class="rv-mid" id="rvmid">Reveal!</div>` + sideHTML(meSlot, "me", "You");
+  for (const slot of [foeSlot, meSlot]){
+    const c = document.getElementById("rvcards" + slot);
+    if (!hand[slot].length){ c.innerHTML = `<span style="color:var(--soft);font-size:12px">— held back —</span>`; continue; }
+    hand[slot].forEach((card) => {
+      const d = document.createElement("div"); d.className = "rv-card " + card.k;
+      d.innerHTML = `<span class="em">${card.em}</span><span class="nm">${card.nm}</span>`;
+      c.appendChild(d);
+    });
+  }
+  R.classList.add("show");
+
+  // flip every staged card face-up, staggered
+  const cards = [...R.querySelectorAll(".rv-card")];
+  cards.forEach((c, i) => setTimeout(() => c.classList.add("up"), i * 130));
+  await sleep(cards.length * 130 + 500);
+
+  // resolve, event by event
+  for (const e of events){
+    const mid = $("rvmid");
+    if (e.t === "shield"){ mid.innerHTML = `🛡️ ${sideName(e.who)} braces ${CARDS[e.card].name}`; await sleep(520); }
+    else if (e.t === "curse"){ mid.innerHTML = `🌀 ${sideName(e.who)} curses <b>${e.el}</b>`; await sleep(520); }
+    else if (e.t === "attack"){
+      const tgt = 1 - e.who;
+      if (e.blocked){ mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
+      else {
+        hp[tgt] = Math.max(0, hp[tgt] - e.dmg);
+        mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>`;
+        const hpEl = document.getElementById("rvhp" + tgt); if (hpEl) hpEl.textContent = hp[tgt];
+        dmgFloat(tgt, e.dmg);
+        R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
+      }
+      await sleep(800);
+    }
+  }
+  await sleep(550);
+  R.classList.remove("show");
+  finish();
+}
+
+// ---- Guide (discovered recipes only) & Recipe Book (all) ----
+const CAP = (s) => s[0].toUpperCase() + s.slice(1);
+const ingredients = (c) => c.recipe.map((r) => `${EMO(r)} ${BASE[r] ? CAP(r) : CARDS[r].name}`).join(" + ");
+function renderSheet(mode){
+  const known = mode === "known";
+  const total = Object.keys(CARDS).length;
+  $("sheettitle").textContent = known ? `Your recipes · ${discovered.size}/${total}` : "Recipe Book — everything";
+
+  const attacks = Object.entries(CARDS).filter(([id, c]) => c.kind === "attack");
+  const counterRows = attacks.filter(([id]) => !known || discovered.has(id)).map(([id, c]) => {
+    const s = CARDS[c.counter];
+    const blk = (!known || discovered.has(c.counter)) ? `${s.em} ${s.name}` : "🔒 ???";
+    return `<div class="crow"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg</span><span class="arrow">→ blocked by</span><span class="s">${blk}</span></div>`;
+  }).join("");
+  const curseRow = (!known || discovered.has("curse"))
+    ? `<div class="crow"><span class="a">🌀 Curse</span><span></span><span class="arrow">→</span><span class="s">no block · locks 6s</span></div>` : "";
+
+  const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
+    .map((id) => `<div class="rrow">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
+
+  const foot = known
+    ? (discovered.size === 0
+        ? `<p class="sheetnote">You haven't crafted anything yet — combine elements in a match and recipes appear here.</p>`
+        : `<p class="sheetnote">🔒 ${total - discovered.size} of ${total} recipes still undiscovered — craft them to reveal them.</p>`)
+    : `<p class="sheetnote">Bases 🔥💧🌍💨 are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
+
+  $("sheetbody").innerHTML =
+    `<h3>Counters — what blocks what</h3>${counterRows || `<p class="sheetnote">No attacks discovered yet.</p>`}${curseRow}` +
+    `<h3>Recipes</h3>${recipeRows}${foot}`;
+}
+function openSheet(mode){ renderSheet(mode); $("sheet").hidden = false; }
+$("guide").onclick = () => openSheet("known");
+$("book").onclick  = () => openSheet("all");
+$("sheetclose").onclick = () => { $("sheet").hidden = true; };
+$("sheet").onclick = (e) => { if (e.target === $("sheet")) $("sheet").hidden = true; };
 </script>
 </body>
 </html>
