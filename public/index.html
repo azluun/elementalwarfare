@@ -146,6 +146,14 @@
   [hidden]{display:none!important}
   .namemodal{position:fixed;inset:0;background:rgba(8,10,7,.88);display:flex;align-items:center;justify-content:center;padding:20px;z-index:26}
   .nmbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:320px;width:100%;text-align:center;display:flex;flex-direction:column;gap:10px}
+  /* guided tutorial: coach bar + pulsing highlight */
+  #coach{position:fixed;left:0;right:0;bottom:0;z-index:22;background:var(--panel);border-top:2px solid var(--accent);
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;gap:12px;align-items:center;justify-content:space-between}
+  #coachtext{font-size:14px;line-height:1.45;flex:1} #coachtext b{color:var(--accent)}
+  #coachnext{background:var(--accent);color:#0e120a;border-color:transparent;white-space:nowrap}
+  .tut-on .wrap{padding-bottom:104px}
+  @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 rgba(84,180,131,.7)}50%{box-shadow:0 0 0 6px rgba(84,180,131,0)}}
+  .tut-hi{animation:tutpulse 1.15s infinite;border-color:var(--accent)!important}
 </style>
 </head>
 <body>
@@ -184,6 +192,7 @@
       </div>
     </div>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
+    <button id="howto" style="padding:8px;font-size:13px">❔ How to play</button>
   </div>
 
   <!-- ARENA -->
@@ -239,6 +248,14 @@
     <input id="pnameinput" maxlength="16" placeholder="Player name">
     <button class="pri" id="pnamesave" style="background:var(--accent);color:#0e120a;border-color:transparent">Save &amp; continue</button>
   </div>
+</div>
+
+<div id="coach" hidden>
+  <span id="coachtext"></span>
+  <span style="display:flex;gap:8px;align-items:center;white-space:nowrap">
+    <button id="coachskip" style="background:none;border:none;color:var(--soft);font-size:12px;cursor:pointer;padding:2px">Skip</button>
+    <button id="coachnext" hidden>Continue</button>
+  </span>
 </div>
 
 <div class="over" id="over"><div class="box">
@@ -463,6 +480,7 @@ function updateUI(){
   $("ready").disabled = locked;
   $("craft").classList.toggle("off", !canAct());
   renderBases(); renderInv(); renderPlan();
+  if (tutorialMode) highlightTargets(); // re-apply pulse after the re-render
 }
 
 // ---- crafting ----
@@ -473,6 +491,7 @@ function renderBases(){
     const b = document.createElement("button");
     b.className = "base" + (isLocked(el) ? " locked":"");
     b.disabled = !canAct() || isLocked(el);
+    b.dataset.el = el;
     b.innerHTML = `<span>${em}</span><small>${el}</small>`;
     b.onclick = () => addToSlot(el);
     $("bases").appendChild(b);
@@ -510,6 +529,7 @@ function craft(){
   apSpent++;
   $("hint").textContent = `Crafted ${CARDS[id].name}! (−1 AP)`;
   clear(); updateUI();
+  if (tutorialMode) tutOnState();
 }
 function flash(){ $("craft").classList.add("shake"); setTimeout(()=>$("craft").classList.remove("shake"),300); }
 
@@ -523,6 +543,7 @@ function renderInv(){
     const c = CARDS[id];
     const el = document.createElement("div");
     el.className = "card " + c.kind;
+    el.dataset.id = id;
     el.title = "Click to add to the combiner";
     el.innerHTML = `<span class="em">${c.em}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
     el.onclick = (e) => { if (e.target.tagName !== "BUTTON") addToSlot(id); };  // advance
@@ -542,6 +563,7 @@ function stage(id){
   inv[id]--; apSpent++;
   plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield" | "curse"
   updateUI();
+  if (tutorialMode) tutOnState();
 }
 function renderPlan(){
   const p = $("planstrip");
@@ -564,6 +586,7 @@ function unstage(idx){
   updateUI();
 }
 function doReady(){
+  if (tutorialMode){ if (guideStep === 3) tutorialReveal(); return; }
   if (locked || !ws || ws.readyState!==1) return;
   locked = true;
   ws.send(JSON.stringify({ type:"plan", deploys: plan.map(d=>({ k:d.k, card:d.card })) }));
@@ -604,6 +627,7 @@ async function startReveal(m){
   const finish = () => {
     animating = false;
     applyPlayers(m.players); (m.logs || []).forEach(addLog);
+    if (tutorialMode){ guideStep = 4; renderGuide(); return; } // back to the coach for the counter lesson
     if (pendingOver){ const o = pendingOver; pendingOver = null; showOver(o); }
     else if (pendingRound){ const r = pendingRound; pendingRound = null; newRound(r); }
   };
@@ -697,6 +721,64 @@ $("guide").onclick = () => openSheet("known");
 $("book").onclick  = () => openSheet("all");
 $("sheetclose").onclick = () => { $("sheet").hidden = true; };
 $("sheet").onclick = (e) => { if (e.target === $("sheet")) $("sheet").hidden = true; };
+
+// ---- guided tutorial: a scripted first match that coaches each action ----
+let tutorialMode = false, guideStep = 0;
+const GUIDE = [
+  { text: "👋 Let's learn by playing. Craft your first card: tap <b>🔥 Fire</b>, then <b>🌍 Earth</b>, to make <b>🌋 Lava</b>.", done: () => (inv.lava||0) > 0 },
+  { text: "Nice — 🌋 Lava is an ingredient. Now build a weapon: tap <b>🌋 Lava</b>, then <b>🔥 Fire</b>, to craft <b>☄️ Meteor</b>.", done: () => (inv.meteor||0) > 0 },
+  { text: "☄️ Meteor hits for 12! Add it to your plan — tap <b>Attack</b> on the Meteor card.", done: () => plan.some((d) => d.card === "meteor") },
+  { text: "Locked and loaded. Tap <b>Ready</b> to reveal your move.", ready: true },
+  { text: "💥 Boom — 12 damage! One catch: a <b>🌐 Planet</b> shield would have blocked that Meteor. Every attack has one counter — reading your opponent is the whole game.", cont: true },
+  { text: "That's the loop: <b>craft → plan → reveal</b>. Sign in and jump into a real match. Good luck! 🏆", cont: true, last: true },
+];
+function renderGuide(){
+  const g = GUIDE[guideStep];
+  $("coachtext").innerHTML = g.text;
+  $("coachnext").hidden = !(g.cont || g.last);
+  $("coachnext").textContent = g.last ? "Finish" : "Continue";
+  $("coach").hidden = false;
+  highlightTargets();
+}
+function tutOnState(){ const g = GUIDE[guideStep]; if (g && g.done && g.done()){ guideStep++; renderGuide(); } }
+function clearHi(){ document.querySelectorAll(".tut-hi").forEach((e) => e.classList.remove("tut-hi")); }
+function hi(sel){ const e = document.querySelector(sel); if (e) e.classList.add("tut-hi"); }
+function highlightTargets(){
+  clearHi();
+  if (!tutorialMode) return;
+  if (guideStep === 0){ hi('#bases [data-el="fire"]'); hi('#bases [data-el="earth"]'); }
+  else if (guideStep === 1){ hi('#hand [data-id="lava"]'); hi('#bases [data-el="fire"]'); }
+  else if (guideStep === 2){ const c = document.querySelector('#hand [data-id="meteor"]'); const b = c && c.querySelector("button"); if (b) b.classList.add("tut-hi"); }
+  else if (guideStep === 3){ $("ready").classList.add("tut-hi"); }
+}
+function startTutorial(){
+  tutorialMode = true; guideStep = 0; myslot = 0;
+  inv = {}; plan = []; locked = false; round = 1; apBudget = 6; apSpent = 0; shownHp = [30,30];
+  document.body.classList.add("tut-on");
+  $("lobby").style.display = "none"; $("over").style.display = "none"; $("log").innerHTML = "";
+  $("arena").style.display = "flex"; $("roomtag").textContent = "Tutorial";
+  applyPlayers([{ name: profile ? profile.name : "You", hp: 30, shields: [], lock: null }, { name: "Practice Dummy", hp: 30, shields: [], lock: null }]);
+  updateUI();
+  renderGuide();
+}
+function tutorialReveal(){
+  clearHi(); $("coach").hidden = true;
+  startReveal({
+    players: [{ name: profile ? profile.name : "You", hp: 30, shields: [], lock: null }, { name: "Practice Dummy", hp: 18, shields: [], lock: null }],
+    logs: ["💥 Your Meteor hits the Practice Dummy for 12!"],
+    events: [{ t: "attack", who: 0, card: "meteor", blocked: false, dmg: 12 }],
+  });
+}
+function endTutorial(){
+  tutorialMode = false; clearHi();
+  document.body.classList.remove("tut-on");
+  $("coach").hidden = true; $("arena").style.display = "none"; $("lobby").style.display = "flex"; $("roomtag").textContent = "";
+  try { localStorage.setItem("duel.tut.v1", "1"); } catch(e){}
+}
+$("coachnext").onclick = () => { const g = GUIDE[guideStep]; if (g.last) endTutorial(); else { guideStep++; renderGuide(); } };
+$("coachskip").onclick = endTutorial;
+$("howto").onclick = startTutorial;
+try { if (!localStorage.getItem("duel.tut.v1")) startTutorial(); } catch(e){ startTutorial(); }
 </script>
 </body>
 </html>
