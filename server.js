@@ -304,6 +304,13 @@ wss.on("connection", (ws) => {
     const opp = room.players.find((p) => p !== me);
     if (!opp || me.hp <= 0 || opp.hp <= 0) return; // match not live
 
+    if (m.type === "field") {
+      if (me.ready) return;                        // once locked in, the count is frozen
+      const n = Math.max(0, Math.min(16, (m.n | 0))); // how many cards we currently have on the field
+      send(opp.ws, { type: "foeField", n });        // relay the live count (backs only, never the cards)
+      return;
+    }
+
     if (m.type === "plan") {
       if (me.ready) return;                        // already locked in this round
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };

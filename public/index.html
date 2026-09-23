@@ -501,7 +501,8 @@ function handle(m){
   if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
   if (m.type === "resolve") { startReveal(m); }
   if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
-  if (m.type === "oppReady"){ foeStaged = m.count; renderFoeField(); } // opponent locked in N cards (backs only)
+  if (m.type === "foeField"){ foeStaged = m.n; foeLocked = false; renderFoeField(); } // opponent played/cancelled a card — live count (backs only)
+  if (m.type === "oppReady"){ foeStaged = m.count; foeLocked = true; renderFoeField(); } // opponent locked in N cards
 }
 function showOver(m){
   const meName = profile ? profile.name : "";
@@ -545,13 +546,14 @@ function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElem
 // ---- round / plan state ----
 let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myLock = null;
 let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent";
-let foeStaged = null; // how many cards the opponent locked in this round (null = still choosing); shown as face-down backs
+let foeStaged = 0;     // how many cards the opponent has on the field this round (updates live), shown as face-down backs
+let foeLocked = false;  // has the opponent hit Ready (committed) this round?
 const apLeft = () => apBudget - apSpent;
 const canAct = () => !locked && apLeft() > 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function newRound(m){
-  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; locked = false; foeStaged = null;
+  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; locked = false; foeStaged = 0; foeLocked = false;
   applyPlayers(m.players);
   if (round > 1) addLog(`— Round ${round} · ${apBudget} AP —`);
   slots = [null,null]; renderSlots();
@@ -670,6 +672,7 @@ function stage(id){
   inv[id]--; apSpent++;
   plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield" | "curse"
   updateUI();
+  sendFieldCount();               // +card on the field → opponent sees a new back appear
   if (tutorialMode) tutOnState();
 }
 
@@ -730,21 +733,29 @@ function renderPlan(){
     p.appendChild(t);
   });
 }
-// the opponent's side of the field — face-down backs so you see HOW MANY cards they committed, never which
+// the opponent's side of the field — face-down backs update live as they play/cancel; you see HOW MANY, never which
 function renderFoeField(){
   const f = $("fieldfoe");
   if (tutorialMode){ f.innerHTML = `<span class="fieldempty">🎯 Practice Dummy</span>`; return; }
-  if (foeStaged == null){ f.innerHTML = `<span class="fieldempty">🂠 ${foeName} is planning…</span>`; return; }
-  if (foeStaged === 0){ f.innerHTML = `<span class="fieldempty">✋ ${foeName} locked in — no cards played</span>`; return; }
-  f.innerHTML = `<span class="foelabel">🔒 ${foeName} locked in ${foeStaged} card${foeStaged>1?"s":""}</span>` +
-    Array.from({length: foeStaged}).map(() => `<div class="cardback">?</div>`).join("");
+  const n = foeStaged || 0;
+  if (n === 0){
+    f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} locked in — no cards played` : `🂠 ${foeName} is planning…`}</span>`;
+    return;
+  }
+  const label = foeLocked ? `🔒 ${foeName} locked in ${n} card${n>1?"s":""}`
+                          : `🂠 ${foeName} is planning — ${n} on the field`;
+  f.innerHTML = `<span class="foelabel">${label}</span>` +
+    Array.from({length: n}).map(() => `<div class="cardback">?</div>`).join("");
 }
+// tell the opponent our live card count whenever we play or cancel one (backs only — never which cards)
+function sendFieldCount(){ if (!tutorialMode && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "field", n: plan.length })); }
 function unstage(idx){
   if (locked) return;
   const d = plan[idx];
   inv[d.card] = (inv[d.card]||0) + 1; apSpent--;
   plan.splice(idx,1);
   updateUI();
+  sendFieldCount();               // −card from the field → opponent sees a back disappear
 }
 function doReady(){
   if (tutorialMode){ const g = GUIDE[guideStep]; if (g && g.ready) tutPlayReveal(g.ready); return; }
