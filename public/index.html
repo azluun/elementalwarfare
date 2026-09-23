@@ -88,9 +88,10 @@
   .turnbar.mine{border-color:var(--accent)} .turnbar.theirs{opacity:.7}
   #roundmsg{flex:1} .turnbar.mine #roundmsg{color:var(--you)} .turnbar.theirs #roundmsg{color:var(--soft)}
   #timer{font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--soft)}
-  .apdots{display:flex;gap:4px}
+  .apdots{display:flex;gap:4px;flex-wrap:wrap;max-width:120px;justify-content:center}
   .apdots span{width:12px;height:12px;border-radius:50%;background:var(--line)}
   .apdots span.on{background:var(--amber)}
+  .apdots span.bank{box-shadow:0 0 0 1px var(--shield) inset} .apdots span.bank.on{background:var(--shield)}
   #ready{background:var(--accent);color:#0e120a;border-color:transparent}
   #ready:disabled{opacity:.4;background:var(--panel2);color:var(--ink)}
   .craft.off{opacity:.45;pointer-events:none}
@@ -580,6 +581,7 @@ function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElem
 
 // ---- round / plan state ----
 let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myDisabled = new Set();
+let manaBase = 2, manaCarried = 0, manaNextCap = 0; // this round's base mana, mana banked from before, and how much can bank forward
 let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent";
 let foeStaged = 0;     // how many cards the opponent has on the field this round (updates live), shown as face-down backs
 let foeLocked = false;  // has the opponent hit Ready (committed) this round?
@@ -589,9 +591,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function newRound(m){
   round = m.round; apBudget = m.ap; apSpent = 0; plan = []; locked = false; foeStaged = 0; foeLocked = false;
+  manaBase = m.base != null ? m.base : apBudget; manaCarried = m.carried || 0; manaNextCap = m.nextCap || 0;
   applyPlayers(m.players);
-  if (round > 1) addLog(`— Round ${round} · ${apBudget} AP —`);
   slots = [null,null]; renderSlots();
+  $("hint").innerHTML = manaNextCap > 0
+    ? `Tap 2 to craft · drag a card up to play. <b style="color:var(--shield)">Leftover mana banks for next round (max ${manaNextCap} 🔷).</b>`
+    : `Tap two elements to craft · drag a card up to play.`;
   updateUI();
   startTimer(m.seconds);
 }
@@ -616,8 +621,9 @@ function applyPlayers(players){
 }
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
-  $("roundmsg").textContent = locked ? "Waiting for opponent…" : `Round ${round} — plan`;
-  $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}"></span>`).join("");
+  $("roundmsg").innerHTML = locked ? "Waiting for opponent…"
+    : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">🔷${manaCarried} banked</span>` : ""}`;
+  $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}${i>=manaBase?" bank":""}"></span>`).join("");
   $("ready").textContent = locked ? "Locked in" : "Ready";
   $("ready").disabled = locked;
   $("craft").classList.toggle("off", !canAct());
@@ -1022,6 +1028,7 @@ const meP = () => ({ name: profile ? profile.name : "You", hp: 30, shields: [], 
 const dummyP = (hp) => ({ name: "Practice Dummy", hp, shields: [], disabled: [] });
 function tutRound(ap, foeHp){ // start a fresh tutorial round with a set AP budget
   round++; inv = {}; plan = []; locked = false; apSpent = 0; apBudget = ap; slots = [null,null];
+  manaBase = ap; manaCarried = 0; manaNextCap = 0; // tutorial has no banking
   applyPlayers([meP(), dummyP(foeHp)]);
   updateUI();
 }
@@ -1081,6 +1088,7 @@ function highlightTargets(){
 function startTutorial(){
   tutorialMode = true; guideStep = 0; myslot = 0;
   inv = {}; plan = []; slots = [null,null]; locked = false; round = 1; apBudget = 2; apSpent = 0; shownHp = [30,30]; foeStaged = null;
+  manaBase = 2; manaCarried = 0; manaNextCap = 0;
   document.body.classList.add("tut-on");
   $("lobby").style.display = "none"; $("over").style.display = "none";
   $("arena").style.display = "flex"; $("roomtag").textContent = "Tutorial";

@@ -147,8 +147,11 @@ const server = http.createServer((req, res) => {
 // --- authoritative combat rules (client mirrors these for its own UI) ---
 const START_HP = 30;
 const DISABLE_ROUNDS = 1; // an unblocked attack disables an enemy base element for this many upcoming rounds
-const AP_CAP = 5;
-const apFor = (round) => Math.min(AP_CAP, round + 1); // mana curve: round 1 = 2 AP, +1 per round, capped
+// mana economy: a small base each round (grows +1 every 3 rounds) PLUS whatever you banked.
+// unspent mana carries into the next round, but only up to a cap that grows +1 every 2 rounds —
+// so you can deliberately hold back to fund a big turn, and banking gets stronger as the game drags on.
+const baseMana = (round) => 2 + Math.floor((round - 1) / 3); // 2,2,2,3,3,3,4,4,4,5…
+const carryCap = (round) => Math.floor((round - 1) / 2);     // 0,0,1,1,2,2,3,3,4… (max banked mana you may carry INTO this round)
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
 // attacks: damage + disable one enemy base element for a round (blocking the attack negates both)
 const ATTACKS = {
@@ -202,13 +205,13 @@ function pushState(room, log) {
 }
 function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0,
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
     playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", rating: prof ? (prof.rating || 1000) : null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
   if (room.players.length === 2) {
-    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.plan = null; x.ready = false; });
+    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
     room.round = 1;
     beginRound(room, "start");
   } else {
@@ -232,7 +235,7 @@ function leaveRoom(ws) { // used when a socket starts a new match (rematch) or d
 
 // --- bot: builds a plan for the round out of its AP budget (each card costs craft + deploy) ---
 function botPlan(room, bot) {
-  const deploys = []; let rem = apFor(room.round);
+  const deploys = []; let rem = bot.mana != null ? bot.mana : baseMana(room.round);
   while (true) {
     const aff = Object.keys(COST).filter((c) => COST[c] <= rem);
     if (!aff.length) break;
@@ -251,7 +254,12 @@ function resolveRound(room) {
   const logs = [], events = []; // events drive the client reveal animation
   const of = (p, kind) => (p.plan && p.plan.deploys || []).filter((d) => d.k === kind);
   // tally the mana each side spent this round (for coin rewards)
-  for (const p of [A, B]) { const dep = (p.plan && p.plan.deploys) || []; p.manaSpent = (p.manaSpent || 0) + dep.reduce((s, d) => s + (COST[d.card] || 1), 0); }
+  for (const p of [A, B]) {
+    const dep = (p.plan && p.plan.deploys) || [];
+    const spent = dep.reduce((s, d) => s + (COST[d.card] || 1), 0);
+    p.manaSpent = (p.manaSpent || 0) + spent;
+    p.leftover = Math.max(0, (p.mana || 0) - spent); // unspent mana banks toward next round
+  }
   // 1) defenses go first, so a shield played this round blocks an attack played this round; heals + restores apply now too
   for (const p of [A, B]) for (const d of of(p, "shield")) {
     const def = DEFENSE[d.card] || {};
@@ -330,7 +338,15 @@ function nextRound(room) {
   setTimeout(() => { if (rooms.get(room.code)) beginRound(room, "round"); }, 2800); // leave room for the reveal animation
 }
 function beginRound(room, type) {
-  broadcast(room, { type, players: stateOf(room), round: room.round, ap: apFor(room.round), seconds: ROUND_SECONDS });
+  const round = room.round, base = baseMana(round), cap = carryCap(round), nextCap = carryCap(round + 1);
+  for (const p of room.players) {
+    const carried = Math.min(p.leftover || 0, cap); // bank up to the cap; any excess is lost
+    p.mana = base + carried;
+    p.carriedIn = carried;
+    p.leftover = 0; // recomputed at resolve from whatever is left unspent
+  }
+  // each player gets their OWN mana budget (it depends on what they personally banked)
+  for (const p of room.players) send(p.ws, { type, players: stateOf(room), round, ap: p.mana, base, carried: p.carriedIn, nextCap, seconds: ROUND_SECONDS });
   clearTimeout(room.timer);
   room.timer = setTimeout(() => forceResolve(room), (ROUND_SECONDS + 2) * 1000); // safety net if a client never answers
 }
@@ -378,9 +394,9 @@ wss.on("connection", (ws) => {
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
-      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], disabled: {}, manaSpent: 0, isBot: true };
+      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0, isBot: true };
       room.players.push(bot); // slot 1
-      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.plan = null; x.ready = false; });
+      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
       room.round = 1;
       beginRound(room, "start");
       return;
