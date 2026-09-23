@@ -29,7 +29,7 @@ async function handleAuth(req, res) {
       const { idToken, discovered, name, tutorialDone } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [] };
+      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [], coins: 0, skins: ["default"], cardSkin: "default" };
       let nameTaken = false;
       if (typeof name === "string" && name.trim()) {          // a name was submitted (first login / name prompt)
         const wanted = name.trim().slice(0, 16);
@@ -41,6 +41,9 @@ async function handleAuth(req, res) {
       if (profile.title == null) profile.title = "";
       if (profile.tutorialDone == null) profile.tutorialDone = false;
       if (tutorialDone === true) profile.tutorialDone = true;            // client marks it done after the guided match
+      if (profile.coins == null) profile.coins = 0;                     // coin wallet + owned/equipped skins
+      if (!Array.isArray(profile.skins)) profile.skins = ["default"];
+      if (profile.cardSkin == null) profile.cardSkin = "default";
       profile.dev = DEV_EMAILS.has((p.email || "").toLowerCase()); // refresh dev flag each login
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
@@ -82,6 +85,41 @@ async function handleCosmetic(req, res) {
   });
 }
 
+// buy or equip a cosmetic card-background skin (coins are spent server-side; no gameplay effect)
+async function handleShop(req, res) {
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
+  req.on("end", async () => {
+    try {
+      if (!googleClient) throw new Error("sign-in not configured");
+      const { idToken, action, skin } = JSON.parse(body || "{}");
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      const prof = store.getProfile(ticket.getPayload().sub);
+      if (!prof) throw new Error("no profile");
+      if (prof.coins == null) prof.coins = 0;
+      if (!Array.isArray(prof.skins)) prof.skins = ["default"];
+      if (prof.cardSkin == null) prof.cardSkin = "default";
+      if (action === "buy") {
+        const price = SKINS[skin];
+        if (price == null) throw new Error("unknown skin");
+        if (prof.skins.includes(skin)) throw new Error("already owned");
+        if (prof.coins < price) throw new Error("not enough coins");
+        prof.coins -= price; prof.skins.push(skin);
+      } else if (action === "equip") {
+        if (skin !== "default" && !prof.skins.includes(skin)) throw new Error("not owned");
+        if (SKINS[skin] == null) throw new Error("unknown skin");
+        prof.cardSkin = skin;
+      } else throw new Error("bad action");
+      store.saveProfile(prof.id, prof);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ profile: prof }));
+    } catch (e) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
 // --- HTTP: config + auth endpoints, then static files from public/ ---
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
@@ -94,6 +132,7 @@ const server = http.createServer((req, res) => {
   }
   if (url === "/auth" && req.method === "POST") return handleAuth(req, res);
   if (url === "/cosmetic" && req.method === "POST") return handleCosmetic(req, res);
+  if (url === "/shop" && req.method === "POST") return handleShop(req, res);
   let f = decodeURIComponent(url);
   if (f === "/") f = "/index.html";
   const fp = path.join(PUB, path.normalize(f).replace(/^(\.\.[/\\])+/, ""));
@@ -107,16 +146,30 @@ const server = http.createServer((req, res) => {
 
 // --- authoritative combat rules (client mirrors these for its own UI) ---
 const START_HP = 30;
-const LOCK_ROUNDS = 1; // curse locks a base element for this many upcoming rounds
+const DISABLE_ROUNDS = 1; // an unblocked attack disables an enemy base element for this many upcoming rounds
 const AP_CAP = 5;
 const apFor = (round) => Math.min(AP_CAP, round + 1); // mana curve: round 1 = 2 AP, +1 per round, capped
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
-const ATTACKS = { // card id -> effect
-  firebolt: { dmg: 6, counter: "ward" },
-  meteor:   { dmg: 12, counter: "planet" },
-  storm:    { dmg: 8, counter: "mountain" },
-  plague:   { dmg: 10, counter: "life" },
+// attacks: damage + disable one enemy base element for a round (blocking the attack negates both)
+const ATTACKS = {
+  firebolt: { dmg: 6,  counter: "ward",     disable: "water" },
+  meteor:   { dmg: 12, counter: "planet",   disable: "earth" },
+  storm:    { dmg: 8,  counter: "mountain", disable: "air" },
+  plague:   { dmg: 10, counter: "life",     disable: "fire" },
 };
+// defenses: a played card can block its attack, heal HP, and/or restore (cleanse) disabled element(s)
+const DEFENSE = {
+  mountain: { blocks: "storm",    heal: 4 },
+  ward:     { blocks: "firebolt", restore: "earth" }, // water ward blocks fire AND gives back earth
+  planet:   { blocks: "meteor",   restore: "water" },
+  life:     { blocks: "plague",   heal: 6 },
+  hearth:   { heal: 5, restore: "air" },   // no block — pure recovery
+  dew:      { restoreAll: true, heal: 2 }, // cleanse every disable
+};
+// total mana (craft + play) each card costs — drives the bot's budget and the coin reward
+const COST = { storm:2, firebolt:3, meteor:3, plague:4, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2 };
+// cosmetic card-background skins unlocked with coins (value = price; 0 = free default). No gameplay effect.
+const SKINS = { default:0, ember:5, ocean:5, forest:8, royal:12, rose:15, gold:20 };
 // cosmetic progression: each tier (by rating) unlocks a title. Purely visual — no gameplay effect.
 const TIER_IDS = ["wood", "bronze", "silver", "gold", "platinum", "diamond", "champion"];
 const TIER_MIN = [0, 900, 1050, 1200, 1350, 1500, 1700];
@@ -131,27 +184,31 @@ const randCode = () => { let s = ""; for (let i = 0; i < 4; i++) s += "ABCDEFGHJ
 const send = (ws, obj) => ws.readyState === 1 && ws.send(JSON.stringify(obj));
 const broadcast = (room, obj) => room.players.forEach((p) => send(p.ws, obj));
 function stateOf(room) {
-  return room.players.map((p) => ({
-    name: p.name,
-    hp: p.hp,
-    shields: p.shields.slice(),
-    lock: (p.lock && room.round != null && p.lock.round >= room.round) ? { el: p.lock.el, round: p.lock.round } : null,
-    title: p.title || "",
-    rating: p.rating != null ? p.rating : null,
-  }));
+  return room.players.map((p) => {
+    const disabled = [];
+    if (p.disabled && room.round != null) for (const el in p.disabled) if (p.disabled[el] >= room.round) disabled.push(el);
+    return {
+      name: p.name,
+      hp: p.hp,
+      shields: p.shields.slice(),
+      disabled,                        // base elements currently disabled on this player
+      title: p.title || "",
+      rating: p.rating != null ? p.rating : null,
+    };
+  });
 }
 function pushState(room, log) {
   broadcast(room, { type: "state", players: stateOf(room), log });
 }
 function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null,
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0,
     playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", rating: prof ? (prof.rating || 1000) : null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
   if (room.players.length === 2) {
-    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
+    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.plan = null; x.ready = false; });
     room.round = 1;
     beginRound(room, "start");
   } else {
@@ -174,19 +231,16 @@ function leaveRoom(ws) { // used when a socket starts a new match (rematch) or d
 }
 
 // --- bot: builds a plan for the round out of its AP budget (each card costs craft + deploy) ---
-const BOT_COSTS = { storm: 2, ward: 2, mountain: 2, curse: 2, firebolt: 3, meteor: 3, plague: 3, planet: 3, life: 3 };
 function botPlan(room, bot) {
   const deploys = []; let rem = apFor(room.round);
   while (true) {
-    const aff = Object.keys(BOT_COSTS).filter((c) => BOT_COSTS[c] <= rem);
+    const aff = Object.keys(COST).filter((c) => COST[c] <= rem);
     if (!aff.length) break;
     const card = aff[(Math.random() * aff.length) | 0];
-    rem -= BOT_COSTS[card];
-    if (ATTACKS[card]) deploys.push({ k: "attack", card });
-    else if (card === "curse") deploys.push({ k: "curse" });
-    else deploys.push({ k: "shield", card });
+    rem -= COST[card];
+    deploys.push(ATTACKS[card] ? { k: "attack", card } : { k: "shield", card });
   }
-  bot.plan = { deploys }; bot.ready = true; // ponytail: random-affordable, not strategic
+  bot.plan = { deploys }; bot.ready = true; // random-affordable, not strategic
 }
 
 // --- simultaneous resolution: both plans revealed and applied together, then the next round opens ---
@@ -196,21 +250,32 @@ function resolveRound(room) {
   const slot = (p) => (p === A ? 0 : 1);
   const logs = [], events = []; // events drive the client reveal animation
   const of = (p, kind) => (p.plan && p.plan.deploys || []).filter((d) => d.k === kind);
-  // 1) shields go up first, so a shield played this round can block an attack played this round
-  for (const p of [A, B]) for (const d of of(p, "shield")) { p.shields.push(d.card); events.push({ t: "shield", who: slot(p), card: d.card }); logs.push(`🛡️ ${p.name} braces ${d.card}`); }
-  // 2) curses
-  for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "curse")) {
-    const el = ["fire", "water", "earth", "air"][(Math.random() * 4) | 0];
-    opp.lock = { el, round: room.round + LOCK_ROUNDS }; // locked through this future round
-    events.push({ t: "curse", who: slot(me), el });
-    logs.push(`🌀 ${me.name} curses ${opp.name}'s ${el}`);
+  // tally the mana each side spent this round (for coin rewards)
+  for (const p of [A, B]) { const dep = (p.plan && p.plan.deploys) || []; p.manaSpent = (p.manaSpent || 0) + dep.reduce((s, d) => s + (COST[d.card] || 1), 0); }
+  // 1) defenses go first, so a shield played this round blocks an attack played this round; heals + restores apply now too
+  for (const p of [A, B]) for (const d of of(p, "shield")) {
+    const def = DEFENSE[d.card] || {};
+    const ev = { t: "defense", who: slot(p), card: d.card, block: !!def.blocks, heal: 0, restore: null, restoreAll: !!def.restoreAll };
+    const bits = [];
+    if (def.blocks) { p.shields.push(d.card); bits.push(`raises ${d.card}`); }
+    if (def.heal) { const before = p.hp; p.hp = Math.min(START_HP, p.hp + def.heal); ev.heal = p.hp - before; if (ev.heal) bits.push(`heals ${ev.heal}`); }
+    if (def.restore) { if (p.disabled) delete p.disabled[def.restore]; ev.restore = def.restore; bits.push(`restores ${def.restore}`); }
+    if (def.restoreAll) { p.disabled = {}; bits.push(`cleanses all`); }
+    events.push(ev);
+    logs.push(`🛡️ ${p.name} ${bits.join(" · ") || d.card}`);
   }
-  // 3) attacks — both sides land at once (no turn order, so no first-strike edge)
+  // 2) attacks — both sides land at once (no turn order, so no first-strike edge); an unblocked hit also disables an element
   for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "attack")) {
     const a = ATTACKS[d.card]; if (!a) continue;
     const i = opp.shields.indexOf(a.counter);
     if (i >= 0) { opp.shields.splice(i, 1); events.push({ t: "attack", who: slot(me), card: d.card, blocked: true, dmg: a.dmg }); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
-    else { opp.hp = Math.max(0, opp.hp - a.dmg); events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg }); logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`); }
+    else {
+      opp.hp = Math.max(0, opp.hp - a.dmg);
+      let disable = null;
+      if (a.disable) { opp.disabled = opp.disabled || {}; opp.disabled[a.disable] = room.round + DISABLE_ROUNDS; disable = a.disable; }
+      events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg, disable });
+      logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}${disable ? ` (disables ${disable})` : ""}`);
+    }
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
@@ -220,9 +285,26 @@ function resolveRound(room) {
     const loser  = draw ? null : (aDead ? A : B);
     let newRatings = null;
     if (!room.bot && winner) newRatings = applyRanked(winner, loser); // ranked = human vs human only
-    return broadcast(room, { type: "over", winner: winner ? winner.name : null, newRatings });
+    const coins = winner ? awardCoins(room, winner) : null;           // coins for any win (bot matches included)
+    return broadcast(room, { type: "over", winner: winner ? winner.name : null, newRatings, coins });
   }
   nextRound(room);
+}
+// small coin reward for a win, scaled by how cleanly/quickly/efficiently it was won (server-authoritative)
+function awardCoins(room, winner) {
+  if (!winner.playerId) return null;                 // the bot can't earn coins
+  const prof = store.getProfile(winner.playerId);
+  if (!prof) return null;
+  const rounds = room.round;                         // game length in turns
+  const dmgTaken = START_HP - Math.max(0, winner.hp);
+  const mana = winner.manaSpent || 0;
+  let c = 2;                                          // base
+  c += dmgTaken <= 10 ? 2 : dmgTaken <= 20 ? 1 : 0;  // took little damage
+  c += rounds <= 4 ? 2 : rounds <= 7 ? 1 : 0;        // quick win
+  c += mana <= 12 ? 1 : 0;                            // efficient
+  prof.coins = (prof.coins || 0) + c;
+  store.saveProfile(prof.id, prof);
+  return { id: prof.id, amount: c, total: prof.coins };
 }
 // ELO update + W/L for a finished ranked match; returns each player's new rating + delta
 function applyRanked(winner, loser) {
@@ -296,9 +378,9 @@ wss.on("connection", (ws) => {
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
-      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], lock: null, isBot: true };
+      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], disabled: {}, manaSpent: 0, isBot: true };
       room.players.push(bot); // slot 1
-      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.lock = null; x.plan = null; x.ready = false; });
+      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.plan = null; x.ready = false; });
       room.round = 1;
       beginRound(room, "start");
       return;

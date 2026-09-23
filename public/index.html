@@ -8,7 +8,7 @@
   :root{
     --bg:#0f1310; --panel:#182019; --panel2:#20291f; --line:#2c3828;
     --ink:#e9ecdf; --soft:#9aa389; --accent:#54b483; --amber:#e0a24b;
-    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a;
+    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a; --cardbg:#20291f;
     --dsp:"Fraunces",Georgia,serif; --body:"Spline Sans","Segoe UI",system-ui,sans-serif;
   }
   *{box-sizing:border-box}
@@ -60,7 +60,7 @@
     letter-spacing:.05em;text-transform:uppercase;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:3px 0}
   .fieldempty{font-size:11px;color:var(--soft);text-align:center}
   .playtile{width:48px;height:60px;border-radius:10px;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:2px;border:1px solid var(--line);background:var(--panel2);position:relative}
+    justify-content:center;gap:2px;border:1px solid var(--line);background:var(--cardbg);position:relative}
   .playtile .em{font-size:23px;line-height:1}
   .playtile .nm{font-size:9px;font-weight:700;text-align:center;line-height:1.05}
   .playtile.attack{border-color:var(--foe)} .playtile.shield{border-color:var(--shield)} .playtile.curse{border-color:var(--amber)}
@@ -106,7 +106,7 @@
   .stchip button{background:transparent;border:none;color:inherit;padding:0 2px;font-size:13px;cursor:pointer}
 
   .hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 6px;
+  .card{background:var(--cardbg);border:1px solid var(--line);border-radius:12px;padding:8px 6px;
     display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;
     user-select:none;-webkit-user-select:none}
   .card:hover{border-color:var(--accent)}
@@ -241,6 +241,7 @@
       <div id="profilebox" hidden style="font-size:13px;color:var(--soft);text-align:center">
         Signed in as <b id="pname" style="color:var(--ink)"></b> · <span id="precord" style="color:var(--accent);font-weight:600"></span>
         <button id="signout" style="padding:3px 8px;font-size:11px;margin-left:6px">Sign out</button>
+        <div style="margin-top:4px"><b id="pcoins" style="color:var(--amber);font-weight:700">🪙 0</b></div>
       </div>
     </div>
     <div id="menu" hidden style="display:flex;flex-direction:column;gap:14px">
@@ -257,7 +258,10 @@
         Send this link to your friend:
         <code id="invitelink"></code>
       </div>
-      <button id="cosmetics" style="padding:8px;font-size:13px">🎖️ Titles</button>
+      <div class="row">
+        <button id="cosmetics" style="flex:1;padding:8px;font-size:13px">🎖️ Titles</button>
+        <button id="shop" style="flex:1;padding:8px;font-size:13px">🎨 Card Skins</button>
+      </div>
     </div>
     <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
@@ -351,18 +355,19 @@ const CARDS = {
   lava:    {em:"🌋",name:"Lava",  kind:"item",  recipe:["fire","earth"], info:"ingredient → Meteor"},
   energy:  {em:"⚡",name:"Energy",kind:"item",  recipe:["fire","air"],   info:"ingredient → Firebolt, Plague"},
   mud:     {em:"🟤",name:"Mud",   kind:"item",  recipe:["water","earth"],info:"ingredient → Plague"},
-  // -- attacks --
-  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, counter:"mountain",recipe:["water","air"],  info:"8 dmg · blocked by Mountain"},
-  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, counter:"ward",    recipe:["energy","fire"],info:"6 dmg · blocked by Ward"},
-  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:12,counter:"planet",  recipe:["lava","fire"],  info:"12 dmg · blocked by Planet"},
-  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:10,counter:"life",    recipe:["mud","energy"], info:"10 dmg · blocked by Life"},
-  // -- shields (Mountain also advances into Planet) --
-  mountain:{em:"⛰️",name:"Mountain",kind:"shield",recipe:["earth","air"],    info:"blocks Storm · or craft Planet"},
-  ward:    {em:"💧",name:"Water Ward",kind:"shield",recipe:["water","water"],info:"blocks Firebolt"},
-  planet:  {em:"🌐",name:"Planet",  kind:"shield",recipe:["mountain","earth"],info:"blocks Meteor"},
-  life:    {em:"🌿",name:"Life",    kind:"shield",recipe:["steam","air"],    info:"blocks Plague"},
-  // -- disruption --
-  curse:   {em:"🌀",name:"Curse",   kind:"curse", recipe:["air","air"],      info:"locks an enemy element 1 round"},
+  // -- attacks: damage + disable one enemy element for a round (blocking negates both) --
+  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, disable:"air",  counter:"mountain",recipe:["water","air"],  info:"8 dmg · disables 💨 · blocked by Mountain"},
+  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, disable:"water",counter:"ward",    recipe:["energy","fire"],info:"6 dmg · disables 💧 · blocked by Ward"},
+  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:12,disable:"earth",counter:"planet",  recipe:["lava","fire"],  info:"12 dmg · disables 🌍 · blocked by Planet"},
+  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:10,disable:"fire", counter:"life",    recipe:["mud","energy"], info:"10 dmg · disables 🔥 · blocked by Life"},
+  // -- defenses: block an attack + heal or restore a disabled element --
+  mountain:{em:"⛰️",name:"Mountain",  kind:"shield",blocks:"storm",   heal:4,       recipe:["earth","air"],     info:"blocks Storm · heal 4 · → Planet"},
+  ward:    {em:"💧",name:"Water Ward",kind:"shield",blocks:"firebolt",restore:"earth",recipe:["water","water"],  info:"blocks Firebolt · gives back 🌍"},
+  planet:  {em:"🌐",name:"Planet",    kind:"shield",blocks:"meteor",  restore:"water",recipe:["mountain","earth"],info:"blocks Meteor · gives back 💧"},
+  life:    {em:"🌿",name:"Life",      kind:"shield",blocks:"plague",  heal:6,       recipe:["steam","air"],     info:"blocks Plague · heal 6"},
+  // -- recovery: no block, but heal and cleanse disables --
+  hearth:  {em:"🕯️",name:"Hearth",   kind:"shield",heal:5, restore:"air",           recipe:["fire","fire"],     info:"heal 5 · gives back 💨"},
+  dew:     {em:"💦",name:"Dew",       kind:"shield",heal:2, restoreAll:true,         recipe:["air","air"],       info:"heal 2 · cleanse all disables"},
 };
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
@@ -448,7 +453,7 @@ function syncProgress(){ // push discovered + tutorial flag to the DB, pull back
   if (!profile || !lastIdToken) return;
   fetch("/auth", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ idToken: lastIdToken, tutorialDone: profile.tutorialDone, discovered: [...discovered] }) })
-    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); } }).catch(() => {});
+    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); } }).catch(() => {});
 }
 function showNameModal(suggested, taken){
   $("pnameinput").value = suggested || "";
@@ -472,6 +477,7 @@ function setProfile(p){
   $("profilebox").hidden = false;
   $("menu").hidden = false;      // playing is unlocked only once signed in
   refreshProfileBox();
+  applySkin(); // paint cards with the player's equipped skin
   (p.discovered || []).forEach((id) => discovered.add(id)); // fold server-side discoveries into the local set
   try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
   cacheProfile(); // remember the session so this PC stays logged in
@@ -481,12 +487,28 @@ const TITLES = { bronze:"Kindling", silver:"Duelist", gold:"Elementalist", plati
 const titleColor = (id, tierC) => id === "developer" ? "#b98cff" : tierC; // Developer gets its own colour
 function tierOf(r){ let t = TIERS[0]; for (const x of TIERS){ if (r >= x[0]) t = x; } return { name: t[1], em: t[2], color: t[3], id: t[4] }; }
 function tierIdx(id){ return TIERS.findIndex((x) => x[4] === id); }
+
+// cosmetic card-background skins (prices mirror the server; purely visual). bg = the card colour.
+const SKINS = {
+  default:{ name:"Slate",  price:0,  bg:"#20291f" },
+  ember:  { name:"Ember",  price:5,  bg:"#301a15" },
+  ocean:  { name:"Ocean",  price:5,  bg:"#122833" },
+  forest: { name:"Forest", price:8,  bg:"#15261a" },
+  royal:  { name:"Royal",  price:12, bg:"#211a3a" },
+  rose:   { name:"Rose",   price:15, bg:"#2e1622" },
+  gold:   { name:"Gold",   price:20, bg:"#2b2410" },
+};
+function applySkin(){ // recolour your own cards to the equipped skin (no gameplay effect)
+  const s = SKINS[(profile && profile.cardSkin) || "default"] || SKINS.default;
+  document.documentElement.style.setProperty("--cardbg", s.bg);
+}
 function refreshProfileBox(){
   if (!profile) return;
   const r = profile.rating || 1000, t = tierOf(r);
   $("pname").textContent = profile.name; $("pname").style.color = t.color;
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
   $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
+  $("pcoins").textContent = `🪙 ${profile.coins || 0}`;
 }
 $("signout").onclick = () => {
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
@@ -525,6 +547,11 @@ function showOver(m){
     $("oversub").textContent += `  (${nr.delta >= 0 ? "+" : ""}${nr.delta} → ${nr.rating})`;
     refreshProfileBox();
   }
+  if (profile && m.coins && m.coins.id === profile.id){ // coins earned for the win (server-authoritative)
+    profile.coins = m.coins.total;
+    $("oversub").textContent += `  · 🪙 +${m.coins.amount}`;
+    refreshProfileBox();
+  }
   syncProgress(); // save discovered recipes to the DB and refresh from the authoritative profile
 }
 function rematch(){
@@ -552,7 +579,7 @@ function enterArena(){ $("lobby").style.display="none"; $("arena").style.display
 function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElement("div"); d.textContent=t; l.prepend(d); }
 
 // ---- round / plan state ----
-let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myLock = null;
+let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myDisabled = new Set();
 let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent";
 let foeStaged = 0;     // how many cards the opponent has on the field this round (updates live), shown as face-down backs
 let foeLocked = false;  // has the opponent hit Ready (committed) this round?
@@ -582,8 +609,8 @@ function applyPlayers(players){
   $("mybar").style.width = (me.hp/30*100)+"%"; $("foebar").style.width = (foe.hp/30*100)+"%";
   $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
   $("foeshields").textContent = "Shields: " + foe.shields.length;
-  myLock = me.lock;
-  $("lockwarn").textContent = me.lock ? `⚠ ${me.lock.el} locked!` : "";
+  myDisabled = new Set(me.disabled || []);
+  $("lockwarn").textContent = myDisabled.size ? `⛔ ${[...myDisabled].map(EMO).join(" ")} disabled this round` : "";
   shownHp = [players[0].hp, players[1].hp];
   foeName = foe.name;
 }
@@ -599,7 +626,7 @@ function updateUI(){
 }
 
 // ---- crafting ----
-function isLocked(el){ return !!(myLock && myLock.el === el); }
+function isLocked(el){ return myDisabled.has(el); }
 function renderBases(){
   $("bases").innerHTML = "";
   for (const [el,em] of Object.entries(BASE)){
@@ -662,12 +689,12 @@ function renderInv(){
     el.dataset.id = id;
     el.title = "Click to add to the combiner";
     el.innerHTML = `<span class="em">${c.em}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
-    const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "curse");
+    const playable = (c.kind === "attack" || c.kind === "shield");
     if (playable){
       el.classList.add("playable");
       const hint = document.createElement("div");
       hint.className = "playhint";
-      hint.textContent = c.kind === "shield" ? "↑ drag to defend" : c.kind === "curse" ? "↑ drag to curse" : "↑ drag to attack";
+      hint.textContent = c.kind === "shield" ? "↑ drag to defend" : "↑ drag to attack";
       el.appendChild(hint);
     }
     el.onpointerdown = (e) => onCardPointerDown(e, id); // tap = combine, drag = play
@@ -678,7 +705,7 @@ function stage(id){
   const c = CARDS[id];
   if (!canAct() || !(inv[id] > 0)) return;
   inv[id]--; apSpent++;
-  plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield" | "curse"
+  plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield"
   updateUI();
   sendFieldCount();               // +card on the field → opponent sees a new back appear
   if (tutorialMode) tutOnState();
@@ -690,7 +717,7 @@ function onCardPointerDown(e, id){
   if (e.button != null && e.button > 0) return; // left button / touch only
   e.preventDefault(); // stop the browser starting a text selection on drag
   const c = CARDS[id], startX = e.clientX, startY = e.clientY;
-  const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "curse");
+  const playable = (c.kind === "attack" || c.kind === "shield");
   let moved = false;
   const move = (ev) => {
     if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) moved = true;
@@ -818,9 +845,8 @@ async function startReveal(m){
   const foeSlot = 1 - myslot, meSlot = myslot;
   const hand = { 0: [], 1: [] };
   events.forEach((e) => {
-    if (e.t === "shield") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "shield" });
+    if (e.t === "defense") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "shield" });
     else if (e.t === "attack") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "attack" });
-    else if (e.t === "curse") hand[e.who].push({ em: "🌀", nm: "Curse", k: "curse" });
   });
   const hp = [shownHp[0], shownHp[1]];
   const sideHTML = (slot, cls, label) =>
@@ -846,14 +872,22 @@ async function startReveal(m){
   // resolve, event by event
   for (const e of events){
     const mid = $("rvmid");
-    if (e.t === "shield"){ mid.innerHTML = `🛡️ ${sideName(e.who)} braces ${CARDS[e.card].name}`; await sleep(520); }
-    else if (e.t === "curse"){ mid.innerHTML = `🌀 ${sideName(e.who)} curses <b>${e.el}</b>`; await sleep(520); }
+    if (e.t === "defense"){
+      const c = CARDS[e.card], bits = [];
+      if (e.block) bits.push(`🛡️ ${c.name}`);
+      if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; }
+      if (e.restore) bits.push(`✨ ${EMO(e.restore)} back`);
+      if (e.restoreAll) bits.push(`✨ cleanse all`);
+      mid.innerHTML = `${c.em} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`;
+      await sleep(650);
+    }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
       if (e.blocked){ mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg);
-        mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>`;
+        const dis = e.disable ? ` <span class="blk">⛔ ${EMO(e.disable)}</span>` : "";
+        mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`;
         const hpEl = document.getElementById("rvhp" + tgt); if (hpEl) hpEl.textContent = hp[tgt];
         dmgFloat(tgt, e.dmg);
         R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
@@ -878,10 +912,9 @@ function renderSheet(mode){
   const counterRows = attacks.filter(([id]) => !known || discovered.has(id)).map(([id, c]) => {
     const s = CARDS[c.counter];
     const blk = (!known || discovered.has(c.counter)) ? `${s.em} ${s.name}` : "🔒 ???";
-    return `<div class="crow"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg</span><span class="arrow">→ blocked by</span><span class="s">${blk}</span></div>`;
+    const dis = c.disable ? ` · ⛔${EMO(c.disable)}` : "";
+    return `<div class="crow"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
   }).join("");
-  const curseRow = (!known || discovered.has("curse"))
-    ? `<div class="crow"><span class="a">🌀 Curse</span><span></span><span class="arrow">→</span><span class="s">no block · locks 1 round</span></div>` : "";
 
   const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
     .map((id) => `<div class="rrow">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
@@ -893,7 +926,7 @@ function renderSheet(mode){
     : `<p class="sheetnote">Bases 🔥💧🌍💨 are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
 
   $("sheetbody").innerHTML =
-    `<h3>Counters — what blocks what</h3>${counterRows || `<p class="sheetnote">No attacks discovered yet.</p>`}${curseRow}` +
+    `<h3>Attacks — damage · disable · counter</h3>${counterRows || `<p class="sheetnote">No attacks discovered yet.</p>`}` +
     `<h3>Recipes</h3>${recipeRows}${foot}`;
 }
 function openSheet(mode){ renderSheet(mode); $("sheet").hidden = false; }
@@ -954,10 +987,39 @@ function equipTitle(title){
 }
 $("cosmetics").onclick = openCosmetics;
 
+// ---- card-skin shop: spend coins on cosmetic card backgrounds (reuses the sheet overlay) ----
+function openShop(){
+  if (!profile) return;
+  $("sheettitle").textContent = "🎨 Card Skins";
+  const owned = new Set(profile.skins || ["default"]);
+  const eqp = profile.cardSkin || "default";
+  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on card colours — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  for (const [id, s] of Object.entries(SKINS)){
+    const isOwned = id === "default" || owned.has(id);
+    const isEq = eqp === id;
+    const swatch = `<span style="display:inline-block;width:22px;height:28px;border-radius:6px;border:1px solid var(--line);background:${s.bg}"></span>`;
+    const ctrl = isEq ? `<button disabled>Equipped</button>`
+      : isOwned ? `<button data-skin="${id}" data-act="equip">Equip</button>`
+      : `<button data-skin="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+    rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}>${swatch}` +
+      `<span class="a" style="color:var(--ink);flex:1;margin-left:8px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
+  }
+  $("sheetbody").innerHTML = rows;
+  $("sheetbody").querySelectorAll("button[data-skin]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.skin); });
+  $("sheet").hidden = false;
+}
+function shopAction(action, skin){
+  fetch("/shop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: lastIdToken, action, skin }) })
+    .then((r) => r.json()).then((d) => {
+      if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); openShop(); }
+    }).catch(() => {});
+}
+$("shop").onclick = openShop;
+
 // ---- guided tutorial: a scripted 3-round match coaching attack, mana, and defense ----
 let tutorialMode = false, guideStep = 0;
-const meP = () => ({ name: profile ? profile.name : "You", hp: 30, shields: [], lock: null });
-const dummyP = (hp) => ({ name: "Practice Dummy", hp, shields: [], lock: null });
+const meP = () => ({ name: profile ? profile.name : "You", hp: 30, shields: [], disabled: [] });
+const dummyP = (hp) => ({ name: "Practice Dummy", hp, shields: [], disabled: [] });
 function tutRound(ap, foeHp){ // start a fresh tutorial round with a set AP budget
   round++; inv = {}; plan = []; locked = false; apSpent = 0; apBudget = ap; slots = [null,null];
   applyPlayers([meP(), dummyP(foeHp)]);
@@ -988,7 +1050,7 @@ const GUIDE = [
   // round 3 — shields and blocking
   { text: "The Dummy is winding up a 🔥 <b>Firebolt</b> at you. Block it: craft <b>💧 Water</b>, then <b>💧 Water</b> again → 💧 Water Ward.", setup: () => tutRound(3, 10), hi: ["base:water"], done: () => (inv.ward||0) > 0 },
   { text: "Defend — <b>drag the Water Ward up into the field</b> (shields protect you automatically).", hi: ["card:ward", "field"], done: () => plan.some((d) => d.card === "ward") },
-  { text: "Now tap <b>Ready</b> and watch.", hi: ["ready"], ready: { events: [{ t: "shield", who: 0, card: "ward" }, { t: "attack", who: 1, card: "firebolt", blocked: true, dmg: 6 }], foeHp: 10, logs: ["🛡️ Your Ward blocks the Dummy's Firebolt!"] } },
+  { text: "Now tap <b>Ready</b> and watch.", hi: ["ready"], ready: { events: [{ t: "defense", who: 0, card: "ward", block: true }, { t: "attack", who: 1, card: "firebolt", blocked: true, dmg: 6 }], foeHp: 10, logs: ["🛡️ Your Ward blocks the Dummy's Firebolt!"] } },
   { text: "🛡️ <b>Blocked!</b> Your Ward ate the Firebolt — no damage. Each attack has one shield that stops it (🔥Firebolt→💧Ward, ☄️Meteor→🌐Planet…). Guess right and you shut them down.", cont: true },
   { text: "That's the whole game: <b>craft → plan → reveal</b>, attack and defend, with more mana each round. Sign in and play for real. Good luck! 🏆", cont: true, last: true },
 ];
