@@ -12,6 +12,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
 // --- Google Sign-In (optional): if no client id is configured, the game runs guest-only ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const DEV_EMAILS = new Set((process.env.DEV_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)); // accounts that can equip the secret "Developer" title
 let googleClient = null;
 if (GOOGLE_CLIENT_ID) {
   try { const { OAuth2Client } = require("google-auth-library"); googleClient = new OAuth2Client(GOOGLE_CLIENT_ID); }
@@ -33,6 +34,7 @@ async function handleAuth(req, res) {
       if (profile.rating == null) profile.rating = 1000;                 // backfill older profiles
       if (profile.peak == null) profile.peak = profile.rating;
       if (profile.title == null) profile.title = "";
+      profile.dev = DEV_EMAILS.has((p.email || "").toLowerCase()); // refresh dev flag each login
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
       store.saveProfile(profile.id, profile);
@@ -57,7 +59,9 @@ async function handleCosmetic(req, res) {
       const prof = store.getProfile(ticket.getPayload().sub);
       if (!prof) throw new Error("no profile");
       const peakTier = tierIndex(prof.peak || prof.rating || 1000);
-      if (title === "" || (TITLES[title] && TIER_IDS.indexOf(title) <= peakTier)) {
+      const okDev = title === "developer" && prof.dev;                            // secret title
+      const okTier = TITLES[title] && TIER_IDS.indexOf(title) <= peakTier;         // earned by climbing
+      if (title === "" || okDev || okTier) {
         prof.title = title || "";
         store.saveProfile(prof.id, prof);
         res.writeHead(200, { "content-type": "application/json" });
@@ -320,4 +324,4 @@ wss.on("connection", (ws) => {
 });
 
 // bind 0.0.0.0 so hosts like Render detect the open port (default bind is IPv6-only)
-server.listen(PORT, "0.0.0.0", () => console.log(`Elemental Duel listening on 0.0.0.0:${PORT}`));
+store.ready.then(() => server.listen(PORT, "0.0.0.0", () => console.log(`Elemental Duel listening on 0.0.0.0:${PORT}`)));

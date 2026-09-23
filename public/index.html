@@ -401,14 +401,15 @@ function setProfile(p){
   try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
 }
 const TIERS = [[0,"Wood","🪵","#9aa389","wood"],[900,"Bronze","🥉","#cd7f32","bronze"],[1050,"Silver","🥈","#c7ccd6","silver"],[1200,"Gold","🏅","#f5c542","gold"],[1350,"Platinum","💠","#6fe0d0","platinum"],[1500,"Diamond","💎","#7fd0ff","diamond"],[1700,"Champion","👑","#ff7ac0","champion"]];
-const TITLES = { bronze:"Kindling", silver:"Duelist", gold:"Elementalist", platinum:"Stormcaller", diamond:"Unblockable", champion:"Grandmaster" };
+const TITLES = { bronze:"Kindling", silver:"Duelist", gold:"Elementalist", platinum:"Stormcaller", diamond:"Unblockable", champion:"Grandmaster", developer:"Developer" };
+const titleColor = (id, tierC) => id === "developer" ? "#b98cff" : tierC; // Developer gets its own colour
 function tierOf(r){ let t = TIERS[0]; for (const x of TIERS){ if (r >= x[0]) t = x; } return { name: t[1], em: t[2], color: t[3], id: t[4] }; }
 function tierIdx(id){ return TIERS.findIndex((x) => x[4] === id); }
 function refreshProfileBox(){
   if (!profile) return;
   const r = profile.rating || 1000, t = tierOf(r);
   $("pname").textContent = profile.name; $("pname").style.color = t.color;
-  const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${t.color};font-weight:600">${TITLES[profile.title]}</b>` : "";
+  const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
   $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
 }
 $("signout").onclick = () => {
@@ -489,8 +490,8 @@ function fighterLabel(p, you){
   const nm = esc(p.name);
   if (p.rating == null) return nm + (you ? " (you)" : "");
   const t = tierOf(p.rating);
-  const title = p.title && TITLES[p.title] ? " " + TITLES[p.title] : "";
-  return `${nm}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}${title}</span>`;
+  const title = p.title && TITLES[p.title] ? ` <span style="color:${titleColor(p.title, t.color)}">${TITLES[p.title]}</span>` : "";
+  return `${nm}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}</span><span style="font-size:11px">${title}</span>`;
 }
 function applyPlayers(players){
   const me = players[myslot], foe = players[1-myslot];
@@ -826,6 +827,13 @@ function openCosmetics(){
   let rows = `<div class="crow"${profile.title ? "" : ' style="background:var(--panel2)"'}>` +
     `<span class="a" style="color:var(--ink)">— No title —</span>` +
     `<button data-title="" ${profile.title ? "" : "disabled"}>${profile.title ? "Equip" : "Equipped"}</button></div>`;
+  if (profile.dev){ // secret Developer title, only for dev accounts
+    const eq = profile.title === "developer";
+    rows += `<div class="crow"${eq ? ' style="background:var(--panel2)"' : ""}>` +
+      `<span class="a" style="color:#b98cff;flex:1">Developer</span>` +
+      `<span class="s" style="color:var(--soft)">🛠️ secret</span>` +
+      `<button data-title="developer" ${eq ? "disabled" : ""}>${eq ? "Equipped" : "Equip"}</button></div>`;
+  }
   ["bronze","silver","gold","platinum","diamond","champion"].forEach((id) => {
     const idx = tierIdx(id), t = TIERS[idx], unlocked = peakIdx >= idx, equipped = profile.title === id;
     const ctrl = unlocked

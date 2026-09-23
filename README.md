@@ -114,11 +114,23 @@ until you give it a Google client id. When configured, players **Sign in with Go
 and the server keeps a profile per player: **name, W/L record (ranked = human vs
 human only), and discovered recipes**, saved through `storage.js`.
 
-**Where data lives:** a JSON file at `data/profiles.json`, behind a tiny
-`getProfile / saveProfile` seam. ⚠️ Render's **free tier wipes the filesystem on every
-redeploy**, so stats won't survive a deploy yet — swap `storage.js`'s body for a free
-managed DB (Upstash Redis / Neon Postgres) when you want durable persistence. Nothing
-else in the app changes.
+**Where data lives:** `storage.js` uses **Upstash Redis** when its env vars are set
+(durable — survives Render redeploys), otherwise a local JSON file at
+`data/profiles.json` (fine for dev; wiped by Render's free-tier redeploys). Either way
+an in-memory cache serves reads synchronously.
+
+**Make stats durable (survive deploys) — free, ~3 min:**
+1. Sign up at [upstash.com](https://upstash.com) → **Create Database** → Redis → pick a region.
+2. On the database page, copy **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN**
+   (the "REST API" section).
+3. Add both as env vars — locally in `.env`, and on **Render → Environment** → redeploy.
+
+That's it; no code change. The app auto-detects the vars and switches from file to Redis.
+
+**Secret "Developer" title:** set `DEV_EMAILS` (comma-separated) to the Google account
+emails allowed to equip it — in `.env` and on Render. Those accounts see a **Developer**
+title in the Titles panel; everyone else never does, and the server rejects it for
+non-listed accounts.
 
 **Turn it on — make a Google client id (~5 min, free):**
 1. [console.cloud.google.com](https://console.cloud.google.com) → create a project.
