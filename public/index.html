@@ -544,6 +544,7 @@ function renderBases(){
   }
 }
 function addToSlot(el){
+  if (tutorialMode && !tutCombineAllowed(el)){ $("hint").textContent = "Just follow the glowing steps ✨"; flash(); return; }
   if (!canAct()){ $("hint").textContent = locked ? "Locked in — waiting for opponent." : "No AP left — hit Ready."; return; }
   if (isLocked(el)) return;
   const i = slots[0]===null?0 : slots[1]===null?1 : 0;
@@ -871,9 +872,19 @@ let tutorialMode = false, guideStep = 0;
 const meP = () => ({ name: profile ? profile.name : "You", hp: 30, shields: [], lock: null });
 const dummyP = (hp) => ({ name: "Practice Dummy", hp, shields: [], lock: null });
 function tutRound(ap, foeHp){ // start a fresh tutorial round with a set AP budget
-  round++; inv = {}; plan = []; locked = false; apSpent = 0; apBudget = ap;
+  round++; inv = {}; plan = []; locked = false; apSpent = 0; apBudget = ap; slots = [null,null];
   applyPlayers([meP(), dummyP(foeHp)]);
   updateUI();
+}
+// during the tutorial you may only combine the elements the current step tells you to,
+// so you can't mis-craft, waste an Action Point, or eat an ingredient and soft-lock yourself.
+function tutCombineAllowed(el){
+  const g = GUIDE[guideStep];
+  if (!g || !g.hi) return false;
+  return g.hi.some((tok) => {
+    const [kind, arg] = tok.split(":");
+    return (kind === "base" || kind === "card") && arg === el;
+  });
 }
 const GUIDE = [
   // round 1 — a cheap attack, and what Action Points are
@@ -919,7 +930,7 @@ function highlightTargets(){
 }
 function startTutorial(){
   tutorialMode = true; guideStep = 0; myslot = 0;
-  inv = {}; plan = []; locked = false; round = 1; apBudget = 2; apSpent = 0; shownHp = [30,30];
+  inv = {}; plan = []; slots = [null,null]; locked = false; round = 1; apBudget = 2; apSpent = 0; shownHp = [30,30];
   document.body.classList.add("tut-on");
   $("lobby").style.display = "none"; $("over").style.display = "none"; $("log").innerHTML = "";
   $("arena").style.display = "flex"; $("roomtag").textContent = "Tutorial";
