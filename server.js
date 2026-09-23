@@ -147,11 +147,11 @@ const server = http.createServer((req, res) => {
 // --- authoritative combat rules (client mirrors these for its own UI) ---
 const START_HP = 30;
 const DISABLE_ROUNDS = 1; // an unblocked attack disables an enemy base element for this many upcoming rounds
-// mana economy: a small base each round (grows +1 every 3 rounds) PLUS whatever you banked.
-// unspent mana carries into the next round, but only up to a cap that grows +1 every 2 rounds —
-// so you can deliberately hold back to fund a big turn, and banking gets stronger as the game drags on.
-const baseMana = (round) => 2 + Math.floor((round - 1) / 3); // 2,2,2,3,3,3,4,4,4,5…
-const carryCap = (round) => Math.floor((round - 1) / 2);     // 0,0,1,1,2,2,3,3,4… (max banked mana you may carry INTO this round)
+// mana economy: base mana grows +1 every 2 rounds. On EVEN rounds you may carry exactly ONE
+// unspent mana over from the previous (odd) round; on ODD rounds nothing carries and base
+// "catches up" to the max. So max = base on odd rounds, base+1 on even rounds.
+const baseMana = (round) => 2 + Math.floor((round - 1) / 2); // 2,2,3,3,4,4,5,5,6,6…
+const carryCap = (round) => (round % 2 === 0 ? 1 : 0);       // carry 1 mana, and only INTO an even round
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
 // attacks: damage + disable one enemy base element for a round (blocking the attack negates both)
 const ATTACKS = {
