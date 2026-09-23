@@ -28,8 +28,11 @@ async function handleAuth(req, res) {
       const { idToken, discovered, name } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, discovered: [] };
+      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", discovered: [] };
       if (typeof name === "string" && name.trim()) profile.name = name.trim().slice(0, 16); // chosen at first login
+      if (profile.rating == null) profile.rating = 1000;                 // backfill older profiles
+      if (profile.peak == null) profile.peak = profile.rating;
+      if (profile.title == null) profile.title = "";
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
       store.saveProfile(profile.id, profile);
@@ -42,11 +45,44 @@ async function handleAuth(req, res) {
   });
 }
 
+// equip a cosmetic title, but only one the player has unlocked by their peak rating
+async function handleCosmetic(req, res) {
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
+  req.on("end", async () => {
+    try {
+      if (!googleClient) throw new Error("sign-in not configured");
+      const { idToken, title } = JSON.parse(body || "{}");
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      const prof = store.getProfile(ticket.getPayload().sub);
+      if (!prof) throw new Error("no profile");
+      const peakTier = tierIndex(prof.peak || prof.rating || 1000);
+      if (title === "" || (TITLES[title] && TIER_IDS.indexOf(title) <= peakTier)) {
+        prof.title = title || "";
+        store.saveProfile(prof.id, prof);
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ profile: prof }));
+      }
+      throw new Error("not unlocked");
+    } catch (e) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
 // --- HTTP: config + auth endpoints, then static files from public/ ---
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID })); }
+  if (url === "/leaderboard") {
+    const top = store.allProfiles().filter((p) => p.name)
+      .sort((a, b) => (b.rating || 1000) - (a.rating || 1000)).slice(0, 20)
+      .map((p) => ({ name: p.name, rating: p.rating || 1000, wins: p.wins || 0, losses: p.losses || 0 }));
+    res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ top }));
+  }
   if (url === "/auth" && req.method === "POST") return handleAuth(req, res);
+  if (url === "/cosmetic" && req.method === "POST") return handleCosmetic(req, res);
   let f = decodeURIComponent(url);
   if (f === "/") f = "/index.html";
   const fp = path.join(PUB, path.normalize(f).replace(/^(\.\.[/\\])+/, ""));
@@ -70,6 +106,11 @@ const ATTACKS = { // card id -> effect
   storm:    { dmg: 8, counter: "mountain" },
   plague:   { dmg: 10, counter: "life" },
 };
+// cosmetic progression: each tier (by rating) unlocks a title. Purely visual — no gameplay effect.
+const TIER_IDS = ["wood", "bronze", "silver", "gold", "platinum", "diamond", "champion"];
+const TIER_MIN = [0, 900, 1050, 1200, 1350, 1500, 1700];
+const TITLES = { bronze: "Kindling", silver: "Duelist", gold: "Elementalist", platinum: "Stormcaller", diamond: "Unblockable", champion: "Grandmaster" };
+function tierIndex(rating) { let i = 0; for (let k = 0; k < TIER_MIN.length; k++) if (rating >= TIER_MIN[k]) i = k; return i; }
 
 const wss = new WebSocketServer({ server });
 const rooms = new Map(); // code -> { code, players:[player] }
@@ -84,13 +125,17 @@ function stateOf(room) {
     hp: p.hp,
     shields: p.shields.slice(),
     lock: (p.lock && room.round != null && p.lock.round >= room.round) ? { el: p.lock.el, round: p.lock.round } : null,
+    title: p.title || "",
+    rating: p.rating != null ? p.rating : null,
   }));
 }
 function pushState(room, log) {
   broadcast(room, { type: "state", players: stateOf(room), log });
 }
 function addPlayer(ws, room, name) {
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null, playerId: ws.playerId || null };
+  const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], lock: null,
+    playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", rating: prof ? (prof.rating || 1000) : null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
@@ -162,17 +207,29 @@ function resolveRound(room) {
     const draw = aDead && bDead;
     const winner = draw ? null : (aDead ? B : A);
     const loser  = draw ? null : (aDead ? A : B);
-    if (!room.bot && winner) { bumpRecord(winner, "wins"); bumpRecord(loser, "losses"); } // ranked = human vs human only
-    return broadcast(room, { type: "over", winner: winner ? winner.name : null });
+    let newRatings = null;
+    if (!room.bot && winner) newRatings = applyRanked(winner, loser); // ranked = human vs human only
+    return broadcast(room, { type: "over", winner: winner ? winner.name : null, newRatings });
   }
   nextRound(room);
 }
-function bumpRecord(player, field) {
-  if (!player || !player.playerId) return;
-  const prof = store.getProfile(player.playerId);
-  if (!prof) return;
-  prof[field] = (prof[field] || 0) + 1;
-  store.saveProfile(player.playerId, prof);
+// ELO update + W/L for a finished ranked match; returns each player's new rating + delta
+function applyRanked(winner, loser) {
+  const wp = winner.playerId && store.getProfile(winner.playerId);
+  const lp = loser.playerId && store.getProfile(loser.playerId);
+  if (!wp || !lp) { // one side isn't a saved profile — just record the result we can
+    if (wp) { wp.wins = (wp.wins || 0) + 1; store.saveProfile(wp.id, wp); }
+    if (lp) { lp.losses = (lp.losses || 0) + 1; store.saveProfile(lp.id, lp); }
+    return null;
+  }
+  const K = 32, wr = wp.rating || 1000, lr = lp.rating || 1000;
+  const expWin = 1 / (1 + Math.pow(10, (lr - wr) / 400));
+  const wd = Math.round(K * (1 - expWin)), ld = -Math.round(K * (1 - expWin));
+  wp.rating = wr + wd; wp.wins = (wp.wins || 0) + 1;
+  lp.rating = Math.max(0, lr + ld); lp.losses = (lp.losses || 0) + 1;
+  wp.peak = Math.max(wp.peak || 1000, wp.rating); lp.peak = Math.max(lp.peak || 1000, lp.rating); // peak unlocks cosmetics
+  store.saveProfile(wp.id, wp); store.saveProfile(lp.id, lp);
+  return { [wp.id]: { rating: wp.rating, delta: wd }, [lp.id]: { rating: lp.rating, delta: ld } };
 }
 function nextRound(room) {
   room.players.forEach((p) => { p.plan = null; p.ready = false; });

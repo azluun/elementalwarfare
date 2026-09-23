@@ -190,7 +190,9 @@
         Send this link to your friend:
         <code id="invitelink"></code>
       </div>
+      <button id="cosmetics" style="padding:8px;font-size:13px">🎖️ Titles</button>
     </div>
+    <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
     <button id="howto" style="padding:8px;font-size:13px">❔ How to play</button>
   </div>
@@ -297,6 +299,7 @@ const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); // names go through innerHTML
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();
 
@@ -384,10 +387,16 @@ function setProfile(p){
   (p.discovered || []).forEach((id) => discovered.add(id)); // fold server-side discoveries into the local set
   try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
 }
+const TIERS = [[0,"Wood","🪵","#9aa389","wood"],[900,"Bronze","🥉","#cd7f32","bronze"],[1050,"Silver","🥈","#c7ccd6","silver"],[1200,"Gold","🏅","#f5c542","gold"],[1350,"Platinum","💠","#6fe0d0","platinum"],[1500,"Diamond","💎","#7fd0ff","diamond"],[1700,"Champion","👑","#ff7ac0","champion"]];
+const TITLES = { bronze:"Kindling", silver:"Duelist", gold:"Elementalist", platinum:"Stormcaller", diamond:"Unblockable", champion:"Grandmaster" };
+function tierOf(r){ let t = TIERS[0]; for (const x of TIERS){ if (r >= x[0]) t = x; } return { name: t[1], em: t[2], color: t[3], id: t[4] }; }
+function tierIdx(id){ return TIERS.findIndex((x) => x[4] === id); }
 function refreshProfileBox(){
   if (!profile) return;
-  $("pname").textContent = profile.name;
-  $("precord").textContent = `${profile.wins||0}W / ${profile.losses||0}L`;
+  const r = profile.rating || 1000, t = tierOf(r);
+  $("pname").textContent = profile.name; $("pname").style.color = t.color;
+  const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${t.color};font-weight:600">${TITLES[profile.title]}</b>` : "";
+  $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
 }
 $("signout").onclick = () => {
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
@@ -416,8 +425,11 @@ function showOver(m){
   $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
   $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
   $("over").style.display = "flex";
-  if (profile && lastMode !== "bot" && !draw){ // ranked result — keep local record in sync (server is authoritative)
-    if (won) profile.wins = (profile.wins||0)+1; else profile.losses = (profile.losses||0)+1;
+  if (profile && m.newRatings && m.newRatings[profile.id]){ // authoritative ranked result from the server
+    const nr = m.newRatings[profile.id];
+    profile.rating = nr.rating;
+    if (won) profile.wins = (profile.wins||0)+1; else if (!draw) profile.losses = (profile.losses||0)+1;
+    $("oversub").textContent += `  (${nr.delta >= 0 ? "+" : ""}${nr.delta} → ${nr.rating})`;
     refreshProfileBox();
   }
 }
@@ -460,9 +472,16 @@ function newRound(m){
   updateUI();
   startTimer(m.seconds);
 }
+function fighterLabel(p, you){
+  const nm = esc(p.name);
+  if (p.rating == null) return nm + (you ? " (you)" : "");
+  const t = tierOf(p.rating);
+  const title = p.title && TITLES[p.title] ? " " + TITLES[p.title] : "";
+  return `${nm}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}${title}</span>`;
+}
 function applyPlayers(players){
   const me = players[myslot], foe = players[1-myslot];
-  $("myname").textContent = me.name + " (you)"; $("foename").textContent = foe.name;
+  $("myname").innerHTML = fighterLabel(me, true); $("foename").innerHTML = fighterLabel(foe, false);
   $("myhp").textContent = me.hp; $("foehp").textContent = foe.hp;
   $("mybar").style.width = (me.hp/30*100)+"%"; $("foebar").style.width = (foe.hp/30*100)+"%";
   $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
@@ -646,7 +665,7 @@ async function startReveal(m){
   const sideHTML = (slot, cls, label) =>
     `<div class="rv-side" id="rvside${slot}"><div class="rv-name ${cls}">${label}</div>` +
     `<div class="rv-hp" id="rvhp${slot}">${hp[slot]}</div><div class="rv-cards" id="rvcards${slot}"></div></div>`;
-  R.innerHTML = sideHTML(foeSlot, "foe", foeName) + `<div class="rv-mid" id="rvmid">Reveal!</div>` + sideHTML(meSlot, "me", "You");
+  R.innerHTML = sideHTML(foeSlot, "foe", esc(foeName)) + `<div class="rv-mid" id="rvmid">Reveal!</div>` + sideHTML(meSlot, "me", "You");
   for (const slot of [foeSlot, meSlot]){
     const c = document.getElementById("rvcards" + slot);
     if (!hand[slot].length){ c.innerHTML = `<span style="color:var(--soft);font-size:12px">— held back —</span>`; continue; }
@@ -721,6 +740,51 @@ $("guide").onclick = () => openSheet("known");
 $("book").onclick  = () => openSheet("all");
 $("sheetclose").onclick = () => { $("sheet").hidden = true; };
 $("sheet").onclick = (e) => { if (e.target === $("sheet")) $("sheet").hidden = true; };
+
+// ---- arena leaderboard (reuses the sheet overlay) ----
+function openLeaderboard(){
+  $("sheettitle").textContent = "🏆 Arena Leaderboard";
+  $("sheetbody").innerHTML = `<p class="sheetnote">Loading…</p>`;
+  $("sheet").hidden = false;
+  fetch("/leaderboard").then((r) => r.json()).then((d) => {
+    const me = profile ? profile.name : null;
+    const rows = (d.top || []).map((p, i) => {
+      const t = tierOf(p.rating), mine = p.name === me ? ' style="background:var(--panel2)"' : "";
+      return `<div class="crow"${mine}><span style="width:26px;color:var(--soft)">#${i+1}</span>` +
+        `<span class="a" style="color:var(--ink)">${esc(p.name)}</span>` +
+        `<span>${t.em} ${p.rating}</span><span class="s" style="color:var(--soft)">${p.wins}W/${p.losses}L</span></div>`;
+    }).join("");
+    $("sheetbody").innerHTML = rows || `<p class="sheetnote">No ranked players yet — win a match to claim the top spot!</p>`;
+  }).catch(() => { $("sheetbody").innerHTML = `<p class="sheetnote">Couldn't load the leaderboard.</p>`; });
+}
+$("lb").onclick = openLeaderboard;
+
+// ---- cosmetics: equip a title unlocked by your peak tier (reuses the sheet overlay) ----
+function openCosmetics(){
+  if (!profile) return;
+  $("sheettitle").textContent = "🎖️ Titles";
+  const peakIdx = tierIdx(tierOf(profile.peak || profile.rating || 1000).id);
+  let rows = `<div class="crow"${profile.title ? "" : ' style="background:var(--panel2)"'}>` +
+    `<span class="a" style="color:var(--ink)">— No title —</span>` +
+    `<button data-title="" ${profile.title ? "" : "disabled"}>${profile.title ? "Equip" : "Equipped"}</button></div>`;
+  ["bronze","silver","gold","platinum","diamond","champion"].forEach((id) => {
+    const idx = tierIdx(id), t = TIERS[idx], unlocked = peakIdx >= idx, equipped = profile.title === id;
+    const ctrl = unlocked
+      ? `<button data-title="${id}" ${equipped ? "disabled" : ""}>${equipped ? "Equipped" : "Equip"}</button>`
+      : `<span class="s" style="color:var(--soft)">🔒 reach ${t[1]}</span>`;
+    rows += `<div class="crow"${equipped ? ' style="background:var(--panel2)"' : ""}>` +
+      `<span class="a" style="color:${t[3]};flex:1">${TITLES[id]}</span>` +
+      `<span class="s" style="color:var(--soft)">${t[2]} ${t[1]}</span>${ctrl}</div>`;
+  });
+  $("sheetbody").innerHTML = `<p class="sheetnote" style="margin-top:0">Climb the ladder to unlock titles. Opponents see your title in the arena.</p>` + rows;
+  $("sheetbody").querySelectorAll("button[data-title]").forEach((b) => { b.onclick = () => equipTitle(b.dataset.title); });
+  $("sheet").hidden = false;
+}
+function equipTitle(title){
+  fetch("/cosmetic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: lastIdToken, title }) })
+    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; refreshProfileBox(); openCosmetics(); } });
+}
+$("cosmetics").onclick = openCosmetics;
 
 // ---- guided tutorial: a scripted 3-round match coaching attack, mana, and defense ----
 let tutorialMode = false, guideStep = 0;
