@@ -29,7 +29,7 @@ async function handleAuth(req, res) {
       const { idToken, discovered, name, tutorialDone } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [], coins: 0, skins: ["default"], cardSkin: "default" };
+      const profile = (await store.getProfileAsync(p.sub)) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [], coins: 0, skins: ["default"], cardSkin: "default" };
       let nameTaken = false;
       if (typeof name === "string" && name.trim()) {          // a name was submitted (first login / name prompt)
         const wanted = name.trim().slice(0, 16);
@@ -66,7 +66,7 @@ async function handleCosmetic(req, res) {
       if (!googleClient) throw new Error("sign-in not configured");
       const { idToken, title } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-      const prof = store.getProfile(ticket.getPayload().sub);
+      const prof = await store.getProfileAsync(ticket.getPayload().sub);
       if (!prof) throw new Error("no profile");
       const peakTier = tierIndex(prof.peak || prof.rating || 1000);
       const okDev = title === "developer" && prof.dev;                            // secret title
@@ -94,7 +94,7 @@ async function handleShop(req, res) {
       if (!googleClient) throw new Error("sign-in not configured");
       const { idToken, action, skin } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-      const prof = store.getProfile(ticket.getPayload().sub);
+      const prof = await store.getProfileAsync(ticket.getPayload().sub);
       if (!prof) throw new Error("no profile");
       if (prof.coins == null) prof.coins = 0;
       if (!Array.isArray(prof.skins)) prof.skins = ["default"];
@@ -123,7 +123,7 @@ async function handleShop(req, res) {
 // --- HTTP: config + auth endpoints, then static files from public/ ---
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
-  if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID })); }
+  if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID, storage: store.mode, profiles: store.count() })); }
   if (url === "/leaderboard") {
     const top = store.allProfiles().filter((p) => p.name)
       .sort((a, b) => (b.rating || 1000) - (a.rating || 1000)).slice(0, 20)

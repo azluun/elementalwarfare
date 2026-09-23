@@ -25,16 +25,20 @@ async function redis(cmd) {
   return j.result;
 }
 
+function parseVal(v) { return typeof v === "string" ? JSON.parse(v) : v; } // Upstash may hand back a string or an object
 if (useRedis) {
-  // load every profile into the cache once at boot (HGETALL returns [field, value, field, value, …])
+  console.log("Storage: Upstash Redis (durable)");
+  // warm the cache at boot; HGETALL is usually a flat [field,value,…] array but tolerate an object too
   ready = (async () => {
     try {
-      const arr = (await redis(["HGETALL", "profiles"])) || [];
-      for (let i = 0; i < arr.length; i += 2) { try { cache[arr[i]] = JSON.parse(arr[i + 1]); } catch {} }
+      const res = (await redis(["HGETALL", "profiles"])) || [];
+      const flat = Array.isArray(res) ? res : Object.entries(res).flat();
+      for (let i = 0; i < flat.length; i += 2) { try { cache[flat[i]] = parseVal(flat[i + 1]); } catch {} }
       console.log(`Loaded ${Object.keys(cache).length} profiles from Upstash Redis`);
-    } catch (e) { console.error("Upstash load failed (starting empty):", e.message); }
+    } catch (e) { console.error("Upstash load failed (login will fetch profiles directly):", e.message); }
   })();
 } else {
+  console.log("Storage: local JSON file (NOT durable — set UPSTASH_REDIS_REST_URL/TOKEN to persist across redeploys)");
   const FILE = process.env.DATA_FILE || path.join(__dirname, "data", "profiles.json");
   try { cache = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { cache = {}; }
   let t = null;
@@ -50,7 +54,21 @@ if (useRedis) {
 
 module.exports = {
   ready,
+  mode: useRedis ? "redis" : "file",
+  count() { return Object.keys(cache).length; },
   getProfile(id) { return cache[id] ? JSON.parse(JSON.stringify(cache[id])) : null; },
+  // like getProfile, but if it's missing from the in-memory cache, fetch it straight from Redis
+  // (so a returning player is found even if the boot-time bulk load failed or ran in file mode).
+  async getProfileAsync(id) {
+    if (cache[id]) return JSON.parse(JSON.stringify(cache[id]));
+    if (useRedis) {
+      try {
+        const v = await redis(["HGET", "profiles", id]);
+        if (v != null) { const p = parseVal(v); cache[id] = p; return JSON.parse(JSON.stringify(p)); }
+      } catch (e) { console.error("getProfileAsync fetch failed:", e.message); }
+    }
+    return null;
+  },
   saveProfile(id, data) {
     cache[id] = data;
     if (useRedis) redis(["HSET", "profiles", id, JSON.stringify(data)]).catch((e) => console.error("profile save failed:", e.message));
