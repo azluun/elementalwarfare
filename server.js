@@ -290,18 +290,18 @@ function resolveRound(room) {
   }
   nextRound(room);
 }
-// small coin reward for a win, scaled by how cleanly/quickly/efficiently it was won (server-authoritative)
+// small coin reward for a win, scaled to reward long, hard-fought grinds (server-authoritative)
 function awardCoins(room, winner) {
-  if (!winner.playerId) return null;                 // the bot can't earn coins
+  if (!winner.playerId) return null;                     // the bot can't earn coins
   const prof = store.getProfile(winner.playerId);
   if (!prof) return null;
-  const rounds = room.round;                         // game length in turns
+  const rounds = room.round;                             // game length in turns
   const dmgTaken = START_HP - Math.max(0, winner.hp);
   const mana = winner.manaSpent || 0;
-  let c = 2;                                          // base
-  c += dmgTaken <= 10 ? 2 : dmgTaken <= 20 ? 1 : 0;  // took little damage
-  c += rounds <= 4 ? 2 : rounds <= 7 ? 1 : 0;        // quick win
-  c += mana <= 12 ? 1 : 0;                            // efficient
+  let c = 1;                                             // base
+  c += rounds >= 10 ? 3 : rounds >= 7 ? 2 : rounds >= 4 ? 1 : 0; // the longer the duel, the more
+  c += dmgTaken >= 20 ? 2 : dmgTaken >= 10 ? 1 : 0;             // survived a real beating
+  c += mana >= 20 ? 2 : mana >= 12 ? 1 : 0;                    // poured mana into the fight
   prof.coins = (prof.coins || 0) + c;
   store.saveProfile(prof.id, prof);
   return { id: prof.id, amount: c, total: prof.coins };
