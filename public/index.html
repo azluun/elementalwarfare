@@ -167,6 +167,39 @@
   .tut-on .wrap{padding-bottom:104px}
   @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 rgba(84,180,131,.7)}50%{box-shadow:0 0 0 6px rgba(84,180,131,0)}}
   .tut-hi{animation:tutpulse 1.15s infinite;border-color:var(--accent)!important}
+
+  /* ---- compact layout so the whole duel fits on a portrait phone ---- */
+  @media (max-width:480px){
+    .wrap{padding:10px}
+    .arena{gap:8px}
+    .fighter{padding:8px 10px;border-radius:12px}
+    .hpwrap{height:11px;margin-top:5px}
+    .shields{min-height:22px;margin-top:6px;gap:4px}
+    .chip{padding:2px 7px;font-size:11px}
+    .log{height:58px;padding:6px 10px;font-size:12px}
+    .craft{padding:9px;border-radius:12px}
+    .bases{gap:6px}
+    .base{width:50px;height:50px;font-size:22px;border-radius:11px}
+    .base small{font-size:9px}
+    .combine{gap:8px;margin:8px 0 3px}
+    .slot{width:46px;height:46px;font-size:20px;border-radius:11px}
+    .op{font-size:18px}
+    .hint{font-size:11px;margin-top:5px}
+    .turnbar{padding:7px 10px;gap:8px}
+    .apdots{gap:3px}
+    .apdots span{width:10px;height:10px}
+    #ready{padding:7px 12px}
+    .hand{grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px}
+    .card{padding:6px 5px;border-radius:11px;gap:3px}
+    .card .em{font-size:22px}
+    .card .cn{font-size:11px}
+    .card .cd2{font-size:9px}
+    .card .playhint{font-size:9px}
+    .planstrip{min-height:26px;padding:6px 10px}
+    .tut-on .wrap{padding-bottom:96px}
+    #coach{padding:11px 13px calc(11px + env(safe-area-inset-bottom,0px))}
+    #coachtext{font-size:13px;line-height:1.35}
+  }
 </style>
 </head>
 <body>
