@@ -357,16 +357,18 @@ $("joinbtn").onclick = () => {
   connect(c);
 };
 
-// ---- Google sign-in required + persistent profile (first login asks for a name) ----
+// ---- Google sign-in (persistent) + profile; the guided tutorial runs after first login ----
 let lastIdToken = null;
+setTimeout(() => { try { const c = JSON.parse(localStorage.getItem("duel.profile")); if (c && c.id) setProfile(c); } catch(e){} }, 0); // restore session (after consts init)
 fetch("/config").then((r) => r.json()).then((cfg) => {
-  if (!cfg.googleClientId){ $("signinnote").textContent = "⚠ Sign-in isn't set up on this server yet."; return; }
+  if (!cfg.googleClientId){ if (!profile) $("signinnote").textContent = "⚠ Sign-in isn't set up on this server yet."; return; }
   const s = document.createElement("script");
   s.src = "https://accounts.google.com/gsi/client"; s.async = true;
   s.onload = () => {
     if (!window.google) return;
-    google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential });
+    google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential, auto_select: true });
     google.accounts.id.renderButton($("gsigninbtn"), { theme: "filled_black", size: "large", text: "signin_with", shape: "pill" });
+    google.accounts.id.prompt(); // auto sign-in returning players (no click) + refresh the token
   };
   document.head.appendChild(s);
 }).catch(() => {});
@@ -378,9 +380,17 @@ function submitAuth(name){
     body: JSON.stringify({ idToken: lastIdToken, name, discovered: [...discovered] }),
   }).then((r) => r.json()).then((d) => {
     if (d.needsName){ showNameModal(d.suggestedName); }        // first login -> pick a name
-    else if (d.profile){ $("namemodal").hidden = true; setProfile(d.profile); }
+    else if (d.profile){ $("namemodal").hidden = true; setProfile(d.profile); maybeStartTutorial(); }
     else { $("signinnote").textContent = "Sign-in failed — try again."; }
   }).catch(() => { $("signinnote").textContent = "Sign-in failed — try again."; });
+}
+function maybeStartTutorial(){ if (profile && !profile.tutorialDone && !tutorialMode) startTutorial(); }
+function cacheProfile(){ try { localStorage.setItem("duel.profile", JSON.stringify(profile)); } catch(e){} }
+function syncProgress(){ // push discovered + tutorial flag to the DB, pull back the authoritative profile
+  if (!profile || !lastIdToken) return;
+  fetch("/auth", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ idToken: lastIdToken, tutorialDone: profile.tutorialDone, discovered: [...discovered] }) })
+    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); } }).catch(() => {});
 }
 function showNameModal(suggested){
   $("pnameinput").value = suggested || "";
@@ -399,6 +409,7 @@ function setProfile(p){
   refreshProfileBox();
   (p.discovered || []).forEach((id) => discovered.add(id)); // fold server-side discoveries into the local set
   try { localStorage.setItem("duel.discovered", JSON.stringify([...discovered])); } catch(e){}
+  cacheProfile(); // remember the session so this PC stays logged in
 }
 const TIERS = [[0,"Wood","🪵","#9aa389","wood"],[900,"Bronze","🥉","#cd7f32","bronze"],[1050,"Silver","🥈","#c7ccd6","silver"],[1200,"Gold","🏅","#f5c542","gold"],[1350,"Platinum","💠","#6fe0d0","platinum"],[1500,"Diamond","💎","#7fd0ff","diamond"],[1700,"Champion","👑","#ff7ac0","champion"]];
 const TITLES = { bronze:"Kindling", silver:"Duelist", gold:"Elementalist", platinum:"Stormcaller", diamond:"Unblockable", champion:"Grandmaster", developer:"Developer" };
@@ -414,7 +425,8 @@ function refreshProfileBox(){
 }
 $("signout").onclick = () => {
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
-  profile = null;
+  try { localStorage.removeItem("duel.profile"); } catch(e){}
+  profile = null; lastIdToken = null;
   $("menu").hidden = true;
   $("profilebox").hidden = true;
   $("gsigninbtn").hidden = false;
@@ -446,6 +458,7 @@ function showOver(m){
     $("oversub").textContent += `  (${nr.delta >= 0 ? "+" : ""}${nr.delta} → ${nr.rating})`;
     refreshProfileBox();
   }
+  syncProgress(); // save discovered recipes to the DB and refresh from the authoritative profile
 }
 function rematch(){
   $("over").style.display = "none";
@@ -855,7 +868,6 @@ $("cosmetics").onclick = openCosmetics;
 
 // ---- guided tutorial: a scripted 3-round match coaching attack, mana, and defense ----
 let tutorialMode = false, guideStep = 0;
-const TUT_FLAG = "duel.tut.v2";
 const meP = () => ({ name: profile ? profile.name : "You", hp: 30, shields: [], lock: null });
 const dummyP = (hp) => ({ name: "Practice Dummy", hp, shields: [], lock: null });
 function tutRound(ap, foeHp){ // start a fresh tutorial round with a set AP budget
@@ -923,12 +935,12 @@ function endTutorial(){
   tutorialMode = false; clearHi();
   document.body.classList.remove("tut-on");
   $("coach").hidden = true; $("arena").style.display = "none"; $("lobby").style.display = "flex"; $("roomtag").textContent = "";
-  try { localStorage.setItem(TUT_FLAG, "1"); } catch(e){}
+  if (profile){ profile.tutorialDone = true; cacheProfile(); syncProgress(); } // save completion to the DB, once per account
 }
 $("coachnext").onclick = () => { const g = GUIDE[guideStep]; if (g.last) endTutorial(); else { guideStep++; renderGuide(); } };
 $("coachskip").onclick = endTutorial;
 $("howto").onclick = startTutorial;
-try { if (!localStorage.getItem(TUT_FLAG)) startTutorial(); } catch(e){ startTutorial(); }
+// (first-time tutorial is triggered after login via maybeStartTutorial, not on page load)
 </script>
 </body>
 </html>

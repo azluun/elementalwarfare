@@ -26,14 +26,16 @@ async function handleAuth(req, res) {
   req.on("end", async () => {
     try {
       if (!googleClient) throw new Error("sign-in not configured");
-      const { idToken, discovered, name } = JSON.parse(body || "{}");
+      const { idToken, discovered, name, tutorialDone } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", discovered: [] };
+      const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [] };
       if (typeof name === "string" && name.trim()) profile.name = name.trim().slice(0, 16); // chosen at first login
       if (profile.rating == null) profile.rating = 1000;                 // backfill older profiles
       if (profile.peak == null) profile.peak = profile.rating;
       if (profile.title == null) profile.title = "";
+      if (profile.tutorialDone == null) profile.tutorialDone = false;
+      if (tutorialDone === true) profile.tutorialDone = true;            // client marks it done after the guided match
       profile.dev = DEV_EMAILS.has((p.email || "").toLowerCase()); // refresh dev flag each login
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
