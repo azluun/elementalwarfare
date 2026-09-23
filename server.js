@@ -308,6 +308,8 @@ wss.on("connection", (ws) => {
       if (me.ready) return;                        // already locked in this round
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
       me.ready = true;
+      // tell the opponent HOW MANY cards were committed (face-down backs) — never which cards
+      send(opp.ws, { type: "oppReady", count: me.plan.deploys.length });
       if (opp.isBot) botPlan(room, opp);
       if (room.players.every((p) => p.ready)) resolveRound(room);
     }
