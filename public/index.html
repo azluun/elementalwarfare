@@ -316,8 +316,9 @@
 <div class="namemodal" id="namemodal" hidden>
   <div class="nmbox">
     <b style="font-family:var(--dsp);font-size:19px">Choose your player name</b>
-    <p style="font-size:13px;color:var(--soft);margin:0">This is how other players will see you.</p>
+    <p style="font-size:13px;color:var(--soft);margin:0">This is how other players will see you. Names are unique.</p>
     <input id="pnameinput" maxlength="16" placeholder="Player name">
+    <p id="pnameerr" style="font-size:12px;color:var(--foe);margin:0;min-height:15px"></p>
     <button class="pri" id="pnamesave" style="background:var(--accent);color:#0e120a;border-color:transparent">Save &amp; continue</button>
   </div>
 </div>
@@ -436,10 +437,10 @@ function submitAuth(name){
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ idToken: lastIdToken, name, discovered: [...discovered] }),
   }).then((r) => r.json()).then((d) => {
-    if (d.needsName){ showNameModal(d.suggestedName); }        // first login -> pick a name
+    if (d.needsName){ showNameModal(d.suggestedName, d.nameTaken); } // first login / name taken -> pick a (unique) name
     else if (d.profile){ $("namemodal").hidden = true; setProfile(d.profile); maybeStartTutorial(); }
-    else { $("signinnote").textContent = "Sign-in failed — try again."; }
-  }).catch(() => { $("signinnote").textContent = "Sign-in failed — try again."; });
+    else { $("signinnote").textContent = "Sign-in failed — try again."; $("pnamesave").disabled = false; }
+  }).catch(() => { $("signinnote").textContent = "Sign-in failed — try again."; $("pnamesave").disabled = false; });
 }
 function maybeStartTutorial(){ if (profile && !profile.tutorialDone && !tutorialMode) startTutorial(); }
 function cacheProfile(){ try { localStorage.setItem("duel.profile", JSON.stringify(profile)); } catch(e){} }
@@ -449,12 +450,19 @@ function syncProgress(){ // push discovered + tutorial flag to the DB, pull back
     body: JSON.stringify({ idToken: lastIdToken, tutorialDone: profile.tutorialDone, discovered: [...discovered] }) })
     .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); } }).catch(() => {});
 }
-function showNameModal(suggested){
+function showNameModal(suggested, taken){
   $("pnameinput").value = suggested || "";
+  $("pnameerr").textContent = taken ? "⚠ That name is taken — pick another." : "";
   $("namemodal").hidden = false;
-  setTimeout(() => $("pnameinput").focus(), 50);
+  $("pnamesave").disabled = false;
+  setTimeout(() => { const el = $("pnameinput"); el.focus(); el.select(); }, 50);
 }
-$("pnamesave").onclick = () => { const n = ($("pnameinput").value||"").trim(); if (n) submitAuth(n); };
+$("pnamesave").onclick = () => {
+  const n = ($("pnameinput").value||"").trim();
+  if (!n) return;
+  $("pnameerr").textContent = ""; $("pnamesave").disabled = true; // avoid double-submit while we check uniqueness
+  submitAuth(n);
+};
 $("pnameinput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pnamesave").click(); });
 
 function setProfile(p){

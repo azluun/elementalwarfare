@@ -57,4 +57,14 @@ module.exports = {
     else scheduleFileWrite();
   },
   allProfiles() { return Object.values(cache); },
+  // is this player name already used by a DIFFERENT account? (case-insensitive, trimmed)
+  nameTaken(name, exceptId) {
+    const n = String(name || "").trim().toLowerCase();
+    if (!n) return false;
+    for (const [id, p] of Object.entries(cache)) {
+      if (id === exceptId) continue;
+      if (p && String(p.name || "").trim().toLowerCase() === n) return true;
+    }
+    return false;
+  },
 };

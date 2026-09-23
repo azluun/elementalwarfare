@@ -30,7 +30,12 @@ async function handleAuth(req, res) {
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
       const profile = store.getProfile(p.sub) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [] };
-      if (typeof name === "string" && name.trim()) profile.name = name.trim().slice(0, 16); // chosen at first login
+      let nameTaken = false;
+      if (typeof name === "string" && name.trim()) {          // a name was submitted (first login / name prompt)
+        const wanted = name.trim().slice(0, 16);
+        if (store.nameTaken(wanted, profile.id)) nameTaken = true;  // someone else already uses it — reject
+        else profile.name = wanted;                                // unique → claim it
+      }
       if (profile.rating == null) profile.rating = 1000;                 // backfill older profiles
       if (profile.peak == null) profile.peak = profile.rating;
       if (profile.title == null) profile.title = "";
@@ -41,7 +46,7 @@ async function handleAuth(req, res) {
       profile.discovered = [...merged];
       store.saveProfile(profile.id, profile);
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ profile, needsName: !profile.name, suggestedName: p.given_name || p.name || "" }));
+      res.end(JSON.stringify({ profile, needsName: !profile.name, nameTaken, suggestedName: nameTaken ? name.trim().slice(0, 16) : (p.given_name || p.name || "") }));
     } catch (e) {
       res.writeHead(401, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
