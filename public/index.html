@@ -626,8 +626,8 @@ function newRound(m){
   applyPlayers(m.players);
   slots = [null,null]; renderSlots();
   $("hint").innerHTML = manaNextCap > 0
-    ? `Tap 2 to craft · drag a card up to play. <b style="color:var(--shield)">Leftover mana banks for next round (max ${manaNextCap} 🔷).</b>`
-    : `Tap two elements to craft · drag a card up to play.`;
+    ? `Tap 2 to craft · drag up to play · hold to inspect. <b style="color:var(--shield)">Leftover mana banks next round (max ${manaNextCap} 🔷).</b>`
+    : `Tap 2 to craft · drag a card up to play · hold a card to inspect.`;
   updateUI();
   startTimer(m.seconds);
 }
@@ -755,15 +755,25 @@ function onCardPointerDown(e, id){
   e.preventDefault(); // stop the browser starting a text selection on drag
   const c = CARDS[id], startX = e.clientX, startY = e.clientY;
   const playable = (c.kind === "attack" || c.kind === "shield");
-  let moved = false;
+  let moved = false, longPressed = false;
+  // hold ~450ms without moving -> open the card inspector (and swallow the tap/drag)
+  const lpTimer = setTimeout(() => {
+    if (moved || drag) return;
+    longPressed = true;
+    try { navigator.vibrate && navigator.vibrate(15); } catch(e){}
+    openCard(id, () => { $("sheet").hidden = true; }); // Back closes straight to the match
+  }, 450);
   const move = (ev) => {
-    if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) moved = true;
+    if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8){ moved = true; clearTimeout(lpTimer); }
+    if (longPressed) return;
     if (moved && !drag && playable && canAct() && inv[id] > 0) startDrag(id, c);
     if (drag){ drag.ghost.style.left = ev.clientX + "px"; drag.ghost.style.top = ev.clientY + "px"; }
   };
   const up = (ev) => {
+    clearTimeout(lpTimer);
     document.removeEventListener("pointermove", move);
     document.removeEventListener("pointerup", up);
+    if (longPressed) return; // inspector opened on hold — don't combine or play
     if (drag){ const ok = overField(ev); endDrag(); if (ok) stage(id); }
     else if (!moved) addToSlot(id); // a tap = use it in the combiner
   };
@@ -997,7 +1007,7 @@ function cardEffects(id){
   }
   return rows.join("");
 }
-function openCard(id){
+function openCard(id, onBack){
   const c = CARDS[id]; if (!c) return;
   const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : "Ingredient";
   $("sheettitle").textContent = c.name;
@@ -1009,8 +1019,8 @@ function openCard(id){
       `<div class="ieff" style="align-self:stretch;justify-content:center;color:var(--soft)">Recipe: ${ingredients(c)} → ${c.em} ${c.name}</div>` +
     `</div>` +
     `<div class="row" style="margin-top:12px"><button id="cardback">← Back</button></div>`;
-  $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card)); // drill into sub-cards
-  $("cardback").onclick = () => openSheet(sheetMode);
+  $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card, onBack)); // drill into sub-cards
+  $("cardback").onclick = onBack || (() => openSheet(sheetMode)); // from the hand: Back just closes; from the book: return to the list
   $("sheet").hidden = false;
 }
 $("guide").onclick = () => openSheet("known");
