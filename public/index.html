@@ -170,6 +170,35 @@
   .rrow{font-size:13px;padding:4px 0;border-bottom:1px solid var(--line)}
   .rrow .r{color:var(--soft)}
   .sheetnote{font-size:12px;color:var(--soft);margin-top:12px}
+  .rrow.click,.crow.click{cursor:pointer;border-radius:6px} .rrow.click:hover,.crow.click:hover{background:var(--panel2)}
+  /* ---- card inspector ---- */
+  .inspect{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .icard{width:130px;border-radius:16px;border:2px solid var(--line);background:var(--panel2);padding:14px 12px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+  .icard .iem{font-size:46px;line-height:1}
+  .icard .inm{font-family:var(--dsp);font-size:18px;font-weight:600;margin-top:3px}
+  .icard .ikind{font-size:10px;color:var(--soft);text-transform:uppercase;letter-spacing:.08em;margin-top:1px}
+  .icard.attack{border-color:var(--foe)} .icard.shield{border-color:var(--shield)} .icard.item{border-color:var(--amber)}
+  .isection{font-family:var(--dsp);font-size:12px;color:var(--soft);text-transform:uppercase;letter-spacing:.06em;align-self:flex-start;margin-top:4px}
+  .ieffects{width:100%;display:flex;flex-direction:column;gap:6px}
+  .ieff{display:flex;gap:9px;align-items:center;font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  .ieff .k{font-size:17px;flex-shrink:0}
+  /* build tree: the card at the top, ingredients branching down to base elements */
+  .treewrap{width:100%;overflow-x:auto;padding:2px 0 6px}
+  .tree,.tree ul{display:flex;justify-content:center;list-style:none;margin:0;padding:0}
+  .tree ul{padding-top:16px;position:relative}
+  .tree li{position:relative;display:flex;flex-direction:column;align-items:center;padding:16px 5px 0}
+  .tree li::before,.tree li::after{content:"";position:absolute;top:0;width:50%;height:16px;border-top:2px solid var(--line)}
+  .tree li::before{right:50%} .tree li::after{left:50%;border-left:2px solid var(--line)}
+  .tree li:only-child::before,.tree li:only-child::after{display:none}
+  .tree li:only-child{padding-top:0}
+  .tree li:first-child::before,.tree li:last-child::after{border:0}
+  .tree li:last-child::before{border-right:2px solid var(--line)}
+  .tree ul::before{content:"";position:absolute;top:0;left:50%;height:16px;border-left:2px solid var(--line)}
+  .tree>li{padding-top:0}
+  .tnode{display:flex;flex-direction:column;align-items:center;gap:1px;width:60px;padding:6px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel2)}
+  .tnode[data-card]{cursor:pointer} .tnode[data-card]:hover{border-color:var(--accent)}
+  .tnode .tem{font-size:23px;line-height:1} .tnode .tnm{font-size:9px;font-weight:700;text-align:center;line-height:1.05}
+  .tnode.attack{border-color:var(--foe)} .tnode.shield{border-color:var(--shield)} .tnode.item{border-color:var(--amber)} .tnode.base{border-style:dashed;opacity:.9}
   .over .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center;max-width:320px}
   .over h2{font-family:var(--dsp);margin:0 0 8px;font-size:28px}
   .chart{font-size:11px;color:var(--soft);text-align:center;margin-top:4px}
@@ -921,11 +950,11 @@ function renderSheet(mode){
     const s = CARDS[c.counter];
     const blk = (!known || discovered.has(c.counter)) ? `${s.em} ${s.name}` : "🔒 ???";
     const dis = c.disable ? ` · ⛔${EMO(c.disable)}` : "";
-    return `<div class="crow"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
+    return `<div class="crow click" data-card="${id}"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
   }).join("");
 
   const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
-    .map((id) => `<div class="rrow">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
+    .map((id) => `<div class="rrow click" data-card="${id}">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
 
   const foot = known
     ? (discovered.size === 0
@@ -934,10 +963,56 @@ function renderSheet(mode){
     : `<p class="sheetnote">Bases 🔥💧🌍💨 are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
 
   $("sheetbody").innerHTML =
+    `<p class="sheetnote" style="margin-top:0">Tap any card to inspect its build tree and effects.</p>` +
     `<h3>Attacks — damage · disable · counter</h3>${counterRows || `<p class="sheetnote">No attacks discovered yet.</p>`}` +
     `<h3>Recipes</h3>${recipeRows}${foot}`;
+  $("sheetbody").querySelectorAll("[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card));
 }
-function openSheet(mode){ renderSheet(mode); $("sheet").hidden = false; }
+let sheetMode = "all"; // which list the inspector's Back button returns to
+function openSheet(mode){ sheetMode = mode; renderSheet(mode); $("sheet").hidden = false; }
+
+// ---- Clash-Royale-style card inspector: big card, effects, and a build tree down to base elements ----
+function buildNode(id){
+  if (BASE[id]) return `<li><div class="tnode base"><span class="tem">${BASE[id]}</span><span class="tnm">${CAP(id)}</span></div></li>`;
+  const c = CARDS[id];
+  const kids = (c.recipe || []).map(buildNode).join("");
+  return `<li><div class="tnode ${c.kind}" data-card="${id}"><span class="tem">${c.em}</span><span class="tnm">${c.name}</span></div>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
+}
+function cardEffects(id){
+  const c = CARDS[id], rows = [];
+  const E = (k, txt) => rows.push(`<div class="ieff"><span class="k">${k}</span> <span>${txt}</span></div>`);
+  if (c.kind === "attack"){
+    E("💥", `Deals <b>${c.dmg}</b> damage`);
+    if (c.disable) E("⛔", `Disables the enemy's ${EMO(c.disable)} <b>${CAP(c.disable)}</b> for their next round`);
+    const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${cc.em} ${cc.name}</b>`);
+  } else if (c.kind === "shield"){
+    if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${a.em} ${a.name}</b> — negates its damage and disable`); }
+    if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
+    if (c.restore) E("✨", `Restores your ${EMO(c.restore)} <b>${CAP(c.restore)}</b> if it's disabled`);
+    if (c.restoreAll) E("✨", `Cleanses <b>all</b> your disabled elements`);
+  } else {
+    E("🧪", `Crafting ingredient — not played directly`);
+    const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${cc.em} ${cc.name}`);
+    if (usedIn.length) E("➡️", `Used to craft: <b>${usedIn.join(", ")}</b>`);
+  }
+  return rows.join("");
+}
+function openCard(id){
+  const c = CARDS[id]; if (!c) return;
+  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : "Ingredient";
+  $("sheettitle").textContent = c.name;
+  $("sheetbody").innerHTML =
+    `<div class="inspect">` +
+      `<div class="icard ${c.kind}"><div class="iem">${c.em}</div><div class="inm">${c.name}</div><div class="ikind">${kindName}</div></div>` +
+      `<div class="isection">Effects</div><div class="ieffects">${cardEffects(id)}</div>` +
+      `<div class="isection">Build tree</div><div class="treewrap"><ul class="tree">${buildNode(id)}</ul></div>` +
+      `<div class="ieff" style="align-self:stretch;justify-content:center;color:var(--soft)">Recipe: ${ingredients(c)} → ${c.em} ${c.name}</div>` +
+    `</div>` +
+    `<div class="row" style="margin-top:12px"><button id="cardback">← Back</button></div>`;
+  $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card)); // drill into sub-cards
+  $("cardback").onclick = () => openSheet(sheetMode);
+  $("sheet").hidden = false;
+}
 $("guide").onclick = () => openSheet("known");
 $("book").onclick  = () => openSheet("all");
 $("sheetclose").onclick = () => { $("sheet").hidden = true; };
