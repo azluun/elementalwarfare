@@ -120,6 +120,43 @@ async function handleShop(req, res) {
   });
 }
 
+// dev-only profile admin: view / repair / normalize profiles. Gated by DEV_EMAILS (a signed-in dev account).
+async function handleAdmin(req, res) {
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 2e5) req.destroy(); });
+  req.on("end", async () => {
+    try {
+      if (!googleClient) throw new Error("sign-in not configured");
+      const { idToken, action, id, profile } = JSON.parse(body || "{}");
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      const email = (ticket.getPayload().email || "").toLowerCase();
+      if (!DEV_EMAILS.has(email)) throw new Error("not authorized"); // only listed dev accounts
+      const ok = (obj) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+      if (action === "list") {
+        const rows = store.allProfiles().map((p) => ({ id: p.id, name: p.name || "", rating: p.rating || 1000, wins: p.wins || 0, losses: p.losses || 0, coins: p.coins || 0 }));
+        return ok({ profiles: rows, storage: store.mode });
+      }
+      if (action === "get") { return ok({ profile: await store.getProfileAsync(id) }); }
+      if (action === "normalizeAll") { // re-save every profile as a clean single-line JSON string
+        let n = 0; for (const p of store.allProfiles()) { store.saveProfile(p.id, p); n++; }
+        return ok({ normalized: n });
+      }
+      if (action === "set") {
+        if (!profile || typeof profile !== "object" || Array.isArray(profile)) throw new Error("profile must be an object");
+        const pid = String(profile.id || id || "").trim();
+        if (!pid) throw new Error("missing id");
+        profile.id = pid;
+        store.saveProfile(pid, profile); // writes via HSET JSON.stringify -> normalizes format
+        return ok({ ok: true, profile });
+      }
+      throw new Error("bad action");
+    } catch (e) {
+      res.writeHead(e.message === "not authorized" ? 403 : 400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
 // --- HTTP: config + auth endpoints, then static files from public/ ---
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
@@ -133,6 +170,7 @@ const server = http.createServer((req, res) => {
   if (url === "/auth" && req.method === "POST") return handleAuth(req, res);
   if (url === "/cosmetic" && req.method === "POST") return handleCosmetic(req, res);
   if (url === "/shop" && req.method === "POST") return handleShop(req, res);
+  if (url === "/admin" && req.method === "POST") return handleAdmin(req, res);
   let f = decodeURIComponent(url);
   if (f === "/") f = "/index.html";
   const fp = path.join(PUB, path.normalize(f).replace(/^(\.\.[/\\])+/, ""));

@@ -263,6 +263,7 @@
         <button id="cosmetics" style="flex:1;padding:8px;font-size:13px">🎖️ Titles</button>
         <button id="shop" style="flex:1;padding:8px;font-size:13px">🎨 Card Skins</button>
       </div>
+      <button id="admin" hidden style="padding:8px;font-size:13px;border-color:#b98cff;color:#b98cff">🛠 Dev: Profiles</button>
     </div>
     <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
@@ -510,6 +511,7 @@ function refreshProfileBox(){
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
   $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
   $("pcoins").textContent = `🪙 ${profile.coins || 0}`;
+  $("admin").hidden = !profile.dev; // dev-only profile tools
 }
 $("signout").onclick = () => {
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
@@ -1021,6 +1023,53 @@ function shopAction(action, skin){
     }).catch(() => {});
 }
 $("shop").onclick = openShop;
+
+// ---- dev-only profile admin (view / repair / normalize); server enforces DEV_EMAILS ----
+function adminCall(action, extra){
+  return fetch("/admin", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(Object.assign({ idToken: lastIdToken, action }, extra || {})) })
+    .then((r) => r.json()).catch(() => ({ error: "network error" }));
+}
+function openAdmin(){
+  if (!profile || !profile.dev) return;
+  $("sheettitle").textContent = "🛠 Profiles (dev)";
+  $("sheetbody").innerHTML = `<p class="sheetnote" style="margin-top:0">Loading…</p>`;
+  $("sheet").hidden = false;
+  adminCall("list").then((d) => {
+    if (!d || d.error){ $("sheetbody").innerHTML = `<p class="sheetnote">${esc(d && d.error || "Failed to load.")}</p>`; return; }
+    const rows = (d.profiles || []).sort((a,b)=>(b.rating||0)-(a.rating||0)).map((p) =>
+      `<div class="crow"><span class="a" style="color:var(--ink);flex:1">${esc(p.name || "(no name)")} ` +
+      `<span class="s" style="color:var(--soft);font-weight:400">${p.rating} · ${p.wins}W/${p.losses}L · 🪙${p.coins}</span></span>` +
+      `<button data-edit="${esc(p.id)}">Edit</button></div>`).join("");
+    $("sheetbody").innerHTML =
+      `<p class="sheetnote" style="margin-top:0">Storage: <b>${esc(d.storage)}</b> · ${(d.profiles||[]).length} profiles. Editing re-saves as a clean single-line string.</p>` +
+      `<div style="margin:8px 0"><button id="admnorm">🧹 Normalize all (fix formatting)</button></div>` + rows;
+    $("admnorm").onclick = () => { $("admnorm").textContent = "Working…"; adminCall("normalizeAll").then((r) => { $("admnorm").textContent = r && r.normalized != null ? `Normalized ${r.normalized} ✓` : (r && r.error || "Failed"); }); };
+    $("sheetbody").querySelectorAll("button[data-edit]").forEach((b) => b.onclick = () => adminEdit(b.dataset.edit));
+  });
+}
+function adminEdit(id){
+  adminCall("get", { id }).then((d) => {
+    const json = d && d.profile ? JSON.stringify(d.profile, null, 2) : (d && d.error ? "" : "");
+    $("sheetbody").innerHTML =
+      `<p class="sheetnote" style="margin-top:0">Editing <b>${esc(id)}</b>${d && !d.profile ? " — not found" : ""}. Fix values, then Save (stored as clean JSON).</p>` +
+      `<textarea id="admjson" spellcheck="false" style="width:100%;height:300px;font:12px/1.4 monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical">${esc(json)}</textarea>` +
+      `<div id="admmsg" style="font-size:12px;min-height:16px;margin-top:4px;color:var(--foe)"></div>` +
+      `<div class="row" style="margin-top:6px"><button id="admback">← Back</button>` +
+      `<button id="admsave" style="flex:1;background:var(--accent);color:#0e120a;border-color:transparent">Save</button></div>`;
+    $("admback").onclick = openAdmin;
+    $("admsave").onclick = () => {
+      let obj; try { obj = JSON.parse($("admjson").value); } catch(e){ $("admmsg").style.color = "var(--foe)"; $("admmsg").textContent = "Invalid JSON: " + e.message; return; }
+      $("admsave").disabled = true;
+      adminCall("set", { id, profile: obj }).then((r) => {
+        $("admsave").disabled = false;
+        if (r && r.ok){ $("admmsg").style.color = "var(--accent)"; $("admmsg").textContent = "Saved ✓"; if (profile && obj.id === profile.id){ profile = obj; cacheProfile(); refreshProfileBox(); applySkin(); } }
+        else { $("admmsg").style.color = "var(--foe)"; $("admmsg").textContent = r && r.error || "Save failed"; }
+      });
+    };
+  });
+}
+$("admin").onclick = openAdmin;
 
 // ---- guided tutorial: a scripted 3-round match coaching attack, mana, and defense ----
 let tutorialMode = false, guideStep = 0;
