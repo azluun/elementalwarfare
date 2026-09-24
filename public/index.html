@@ -280,6 +280,7 @@
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
+      <button id="forfeit" hidden style="padding:5px 10px;font-size:12px;border-color:var(--foe);color:var(--foe)">🏳 Forfeit</button>
       <button id="guide" style="padding:5px 10px;font-size:12px">📖 Guide</button>
     </div>
   </div>
@@ -309,6 +310,7 @@
         Send this link to your friend:
         <code id="invitelink"></code>
       </div>
+      <button id="cancelsearch" hidden style="padding:8px;font-size:13px;border-color:var(--foe);color:var(--foe)">✕ Cancel / Back</button>
       <div class="row">
         <button id="cosmetics" style="flex:1;padding:8px;font-size:12px">🎖️ Titles</button>
         <button id="shop" style="flex:1;padding:8px;font-size:12px">🎨 Skins</button>
@@ -466,9 +468,20 @@ function openSocket(firstMsg){
   ws.onmessage = (ev) => handle(JSON.parse(ev.data));
 }
 const pid = () => profile ? profile.id : null;
-function connect(room){ if (!profile) return; quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); }
-function quickmatch(){ if (!profile) return; quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name, playerId: pid() })); }
-function botmatch(){ if (!profile) return; quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name, playerId: pid() })); }
+function connect(room){ if (!profile) return; quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); $("cancelsearch").hidden = false; }
+function quickmatch(){ if (!profile) return; quick = true; lastMode = "quick"; $("invite").hidden = true; openSocket((name)=>({ type:"quickmatch", name, playerId: pid() })); $("cancelsearch").hidden = false; }
+function botmatch(){ if (!profile) return; quick = true; lastMode = "bot"; $("invite").hidden = true; openSocket((name)=>({ type:"botmatch", name, playerId: pid() })); $("cancelsearch").hidden = false; }
+// leave the matchmaking queue / created room before a match starts, back to the menu
+function cancelSearch(){
+  if (ws){ ws.onclose = null; try { ws.close(); } catch(e){} } // silent close -> server drops us from waiting/room
+  $("cancelsearch").hidden = true; $("invite").hidden = true;
+  $("status").textContent = ""; $("roomtag").textContent = "";
+}
+// concede a live match: opponent wins, the server sends back the "over" screen
+function forfeit(){
+  if (!confirm("Forfeit this match? Your opponent wins.")) return;
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "forfeit" }));
+}
 function showInvite(room){
   const url = location.origin + location.pathname + "?room=" + room;
   $("invitelink").textContent = url;
@@ -477,6 +490,8 @@ function showInvite(room){
 }
 $("quick").onclick = quickmatch;
 $("bot").onclick = botmatch;
+$("cancelsearch").onclick = cancelSearch;
+$("forfeit").onclick = forfeit;
 $("create").onclick = () => { const c = randCode(); $("room").value = c; connect(c); };
 $("joinbtn").onclick = () => {
   const c = ($("room").value || "").toUpperCase().replace(/[^A-Z0-9]/g,"");
@@ -643,7 +658,7 @@ function handle(m){
   if (m.type === "searching") $("status").textContent = "🔎 Searching for an opponent…";
   if (m.type === "joined")  { myslot = m.slot; if (quick) $("roomtag").textContent = "Matched"; else showInvite(m.code); }
   if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
-  if (m.type === "left")    { $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
+  if (m.type === "left")    { $("forfeit").hidden = true; $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
   if (m.type === "start")   { $("over").style.display = "none"; inv = {}; enterArena(); newRound(m); }
   if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
   if (m.type === "resolve") { startReveal(m); }
@@ -652,10 +667,13 @@ function handle(m){
   if (m.type === "oppReady"){ foeStaged = m.count; foeLocked = true; renderFoeField(); } // opponent locked in N cards
 }
 function showOver(m){
+  $("forfeit").hidden = true;
   const meName = profile ? profile.name : "";
   const draw = m.winner === null, won = m.winner === meName;
   $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
-  $("oversub").textContent = draw ? "You both fell in the same round." : won ? "You crushed them." : m.winner + " won.";
+  $("oversub").textContent = draw ? "You both fell in the same round."
+    : won ? (m.forfeit ? "Your opponent forfeited." : "You crushed them.")
+    : (m.forfeit ? "You forfeited." : m.winner + " won.");
   $("over").style.display = "flex";
   if (profile && m.newRatings && m.newRatings[profile.id]){ // authoritative ranked result from the server
     const nr = m.newRatings[profile.id];
@@ -688,11 +706,12 @@ function backToMenu(){
   $("arena").style.display = "none";
   $("lobby").style.display = "flex";
   $("status").textContent = ""; $("roomtag").textContent = "";
+  $("forfeit").hidden = true; $("cancelsearch").hidden = true;
   inv = {}; plan = []; locked = false;
 }
 $("rematch").onclick = rematch;
 $("tomenu").onclick = backToMenu;
-function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; }
+function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; $("cancelsearch").hidden = true; $("forfeit").hidden = false; }
 function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElement("div"); d.textContent=t; l.prepend(d); }
 
 // ---- round / plan state ----

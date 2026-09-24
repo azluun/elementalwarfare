@@ -508,6 +508,16 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (m.type === "forfeit") {                    // concede a live match — you fall, opponent stands
+      me.hp = 0;
+      clearTimeout(room.timer);
+      const winner = opp, loser = me;
+      const newRatings = room.bot ? null : applyRanked(winner, loser); // ranked = human vs human only
+      const coins = winner.isBot ? null : awardCoins(room, winner);    // bot can't earn; a human opponent does
+      broadcast(room, { type: "over", winner: winner.name, newRatings, coins, forfeit: true });
+      return;
+    }
+
     if (m.type === "plan") {
       if (me.ready) return;                        // already locked in this round
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
