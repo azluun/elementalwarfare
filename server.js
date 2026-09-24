@@ -214,31 +214,31 @@ const DISABLE_ROUNDS = 1; // an unblocked attack disables an enemy base element 
 const baseMana = (round) => 2 + Math.floor((round - 1) / 2); // 2,2,3,3,4,4,5,5,6,6…
 const carryCap = (round) => (round % 2 === 0 ? 1 : 0);       // carry 1 mana, and only INTO an even round
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
-// attacks: damage + disable one enemy base element for a round (blocking the attack negates both)
+// attacks: pure damage (blocking the attack with its counter negates it). Two cost tiers: cheap vs expensive.
 const ATTACKS = {
-  firebolt: { dmg: 6,  counter: "ward",     disable: "water" },
-  meteor:   { dmg: 12, counter: "planet",   disable: "earth" },
-  storm:    { dmg: 8,  counter: "mountain", disable: "air" },
-  plague:   { dmg: 10, counter: "life",     disable: "fire" },
+  storm:    { dmg: 6,  counter: "mountain" }, // cheap (cost 2)
+  firebolt: { dmg: 8,  counter: "ward"     }, // expensive (cost 3)
+  meteor:   { dmg: 11, counter: "planet"   }, // expensive (cost 3)
+  plague:   { dmg: 9,  counter: "life"     }, // expensive (cost 3)
 };
-// defenses: a played card can block its attack, heal HP, and/or restore (cleanse) disabled element(s)
+// defenses: block an attack and/or heal (heals are small now). Some cards also grant +1 mana next round.
 const DEFENSE = {
-  mountain: { blocks: "storm",    heal: 4 },
-  ward:     { blocks: "firebolt", restore: "earth" }, // water ward blocks fire AND gives back earth
-  planet:   { blocks: "meteor",   restore: "water" },
-  life:     { blocks: "plague",   heal: 6 },
-  hearth:   { heal: 5, restore: "air" },   // no block — pure recovery
-  dew:      { restoreAll: true, heal: 2 }, // cleanse every disable
+  mountain: { blocks: "storm",    heal: 2 }, // cheap counter to a cheap attack
+  ward:     { blocks: "firebolt", heal: 2 }, // expensive counter to an expensive attack
+  planet:   { blocks: "meteor",   heal: 2 },
+  life:     { blocks: "plague",   heal: 3 },
+  hearth:   { heal: 2, mana: 1 },            // recovery + a spark of mana next round
+  dew:      { heal: 1, mana: 1 },            // light heal + mana
 };
-// traps: the old "ingredient" cards are now playable. A trap fires only if the opponent attacks you this round.
+// traps: fire only if the opponent attacks you this round (one springs per incoming attack).
 const TRAPS = {
-  lava:   { retaliate: 6 },              // 🌋 Volcano — erupt for 6 back
-  steam:  { heal: 6 },                   // ♨️ Steam — vent, heal 6
-  energy: { disable: "random" },         // ⚡ Energy — shock: disable a random enemy element next round
-  mud:    { retaliate: 3, heal: 3 },     // 🟤 Mud — quagmire: a little of both
+  lava:   { retaliate: 5 },              // 🌋 Volcano — erupt for 5 back
+  steam:  { heal: 3 },                   // ♨️ Steam — vent, heal 3
+  energy: { retaliate: 3, mana: 1 },     // ⚡ Energy — shock back + charge 1 mana
+  mud:    { retaliate: 2, heal: 2 },     // 🟤 Mud — a little of both
 };
-// total mana (craft + play) each card costs — drives the bot's budget and the coin reward
-const COST = { storm:2, firebolt:3, meteor:3, plague:4, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2, lava:2, steam:2, energy:2, mud:2 };
+// total mana (craft + play) each card costs — two tiers now: cheap (2) and expensive (3)
+const COST = { storm:2, firebolt:3, meteor:3, plague:3, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2, lava:2, steam:2, energy:2, mud:2 };
 // cosmetic card-background skins unlocked with coins (value = price; 0 = free default). No gameplay effect.
 const SKINS = { default:0, ember:5, ocean:5, forest:8, royal:12, rose:15, gold:20 };
 // cosmetic profile icons (avatars), also coin-unlocked; purely visual
@@ -352,12 +352,11 @@ function resolveRound(room) {
   // 1) defenses go first, so a shield played this round blocks an attack played this round; heals + restores apply now too
   for (const p of [A, B]) for (const d of of(p, "shield")) {
     const def = DEFENSE[d.card] || {};
-    const ev = { t: "defense", who: slot(p), card: d.card, block: !!def.blocks, heal: 0, restore: null, restoreAll: !!def.restoreAll };
+    const ev = { t: "defense", who: slot(p), card: d.card, block: !!def.blocks, heal: 0, mana: def.mana || 0 };
     const bits = [];
     if (def.blocks) { p.shields.push(d.card); bits.push(`raises ${d.card}`); }
     if (def.heal) { const before = p.hp; p.hp = Math.min(START_HP, p.hp + def.heal); ev.heal = p.hp - before; if (ev.heal) bits.push(`heals ${ev.heal}`); }
-    if (def.restore) { if (p.disabled) delete p.disabled[def.restore]; ev.restore = def.restore; bits.push(`restores ${def.restore}`); }
-    if (def.restoreAll) { p.disabled = {}; bits.push(`cleanses all`); }
+    if (def.mana) { p.manaBonus = (p.manaBonus || 0) + def.mana; bits.push(`+${def.mana} mana`); }
     events.push(ev);
     logs.push(`🛡️ ${p.name} ${bits.join(" · ") || d.card}`);
   }
@@ -368,10 +367,8 @@ function resolveRound(room) {
     if (i >= 0) { opp.shields.splice(i, 1); events.push({ t: "attack", who: slot(me), card: d.card, blocked: true, dmg: a.dmg }); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
     else {
       opp.hp = Math.max(0, opp.hp - a.dmg);
-      let disable = null;
-      if (a.disable) { opp.disabled = opp.disabled || {}; opp.disabled[a.disable] = room.round + DISABLE_ROUNDS; disable = a.disable; }
-      events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg, disable });
-      logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}${disable ? ` (disables ${disable})` : ""}`);
+      events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg });
+      logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`);
     }
   }
   // 3) traps — a set trap stays hidden on the board until the opponent attacks you; then ONE trap springs
@@ -382,10 +379,10 @@ function resolveRound(room) {
     while (springs-- > 0) {
       const card = me.traps.shift();
       const tr = TRAPS[card]; if (!tr) continue;
-      const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, heal: 0, disable: null };
+      const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, heal: 0, mana: tr.mana || 0 };
       if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
       if (tr.heal) { const before = me.hp; me.hp = Math.min(START_HP, me.hp + tr.heal); ev.heal = me.hp - before; }
-      if (tr.disable) { const el = tr.disable === "random" ? ["fire","water","earth","air"][(Math.random() * 4) | 0] : tr.disable; opp.disabled = opp.disabled || {}; opp.disabled[el] = room.round + DISABLE_ROUNDS; ev.disable = el; }
+      if (tr.mana) { me.manaBonus = (me.manaBonus || 0) + tr.mana; }
       events.push(ev);
       logs.push(`🪤 ${me.name}'s ${card} trap springs on ${opp.name}!`);
     }
@@ -446,12 +443,13 @@ function beginRound(room, type) {
   const round = room.round, base = baseMana(round), cap = carryCap(round), nextCap = carryCap(round + 1);
   for (const p of room.players) {
     const carried = Math.min(p.leftover || 0, cap); // bank up to the cap; any excess is lost
-    p.mana = base + carried;
-    p.carriedIn = carried;
+    const bonus = p.manaBonus || 0;                 // mana granted by hearth/dew/energy last round
+    p.mana = base + carried + bonus;
+    p.carriedIn = carried; p.bonusIn = bonus; p.manaBonus = 0;
     p.leftover = 0; p.reportedLeft = null; // recomputed at resolve from whatever is left unspent
   }
   // each player gets their OWN mana budget (it depends on what they personally banked)
-  for (const p of room.players) send(p.ws, { type, players: stateOf(room), round, ap: p.mana, base, carried: p.carriedIn, nextCap, seconds: ROUND_SECONDS });
+  for (const p of room.players) send(p.ws, { type, players: stateOf(room), round, ap: p.mana, base, carried: p.carriedIn, bonus: p.bonusIn || 0, nextCap, seconds: ROUND_SECONDS });
   clearTimeout(room.timer);
   room.timer = setTimeout(() => forceResolve(room), (ROUND_SECONDS + 2) * 1000); // safety net if a client never answers
 }
