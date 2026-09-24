@@ -107,9 +107,10 @@
   .stchip button{background:transparent;border:none;color:inherit;padding:0 2px;font-size:13px;cursor:pointer}
 
   .hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+  .card,.card *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none} /* no text selection / iOS callout on long-press */
   .card{background:var(--cardbg);border:1px solid var(--line);border-radius:12px;padding:8px 6px;
     display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;
-    user-select:none;-webkit-user-select:none}
+    touch-action:none} /* our JS owns the touch gesture (tap/drag/hold), so the browser doesn't scroll or select */
   .card:hover{border-color:var(--accent)}
   .card.item{opacity:.92}
   .card .em{font-size:26px;line-height:1}
@@ -734,7 +735,8 @@ function renderInv(){
       hint.textContent = c.kind === "shield" ? "↑ drag to defend" : "↑ drag to attack";
       el.appendChild(hint);
     }
-    el.onpointerdown = (e) => onCardPointerDown(e, id); // tap = combine, drag = play
+    el.onpointerdown = (e) => onCardPointerDown(e, id); // tap = combine, drag = play, hold = inspect
+    el.oncontextmenu = (e) => e.preventDefault(); // stop the long-press context menu on mobile
     h.appendChild(el);
   });
 }
