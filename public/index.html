@@ -93,6 +93,8 @@
   .elglyph{width:1.05em;height:1.05em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
+  #undo{padding:6px 10px;font-size:12px;border-color:var(--amber);color:var(--amber);background:var(--panel)}
+  #undo[hidden]{display:none}
   .slot{width:56px;height:56px;border:1.5px dashed var(--line);border-radius:12px;display:flex;
     align-items:center;justify-content:center;font-size:24px;color:var(--soft);cursor:pointer}
   .slot.full{border-style:solid;border-color:var(--accent)}
@@ -355,6 +357,7 @@
       <div class="bases" id="bases"></div>
       <div class="combine">
         <div class="slot" id="s0"></div><span class="op">+</span><div class="slot" id="s1"></div>
+        <button id="undo" hidden title="Undo the last combine">↩ Undo</button>
       </div>
       <div class="hint" id="hint">Tap two elements to craft (1 AP). Drag a card up into the field to play it (1 AP).</div>
     </div>
@@ -709,6 +712,7 @@ function handle(m){
   if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
   if (m.type === "foeField"){ foeStaged = m.n; foeLocked = false; renderFoeField(); } // opponent played/cancelled a card — live count (backs only)
   if (m.type === "oppReady"){ foeStaged = m.count; foeLocked = true; renderFoeField(); } // opponent locked in N cards
+  if (m.type === "unreadyOk"){ locked = false; updateUI(); sendFieldCount(); } // our lock-in was retracted — reopen planning
 }
 function showOver(m){
   $("forfeit").hidden = true;
@@ -760,6 +764,7 @@ function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElem
 
 // ---- round / plan state ----
 let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myDisabled = new Set();
+let craftLog = []; // stack of this round's crafts {id, need} so the last combine can be undone
 let manaBase = 2, manaCarried = 0, manaNextCap = 0; // this round's base mana, mana banked from before, and how much can bank forward
 let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent", foeBack = "default";
 let foeStaged = 0;     // how many cards the opponent has on the field this round (updates live), shown as face-down backs
@@ -769,7 +774,7 @@ const canAct = () => !locked && apLeft() > 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function newRound(m){
-  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; locked = false; foeStaged = 0; foeLocked = false;
+  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; craftLog = []; locked = false; foeStaged = 0; foeLocked = false;
   manaBase = m.base != null ? m.base : apBudget; manaCarried = m.carried || 0; manaNextCap = m.nextCap || 0;
   applyPlayers(m.players);
   slots = [null,null]; renderSlots();
@@ -803,8 +808,9 @@ function updateUI(){
   $("roundmsg").innerHTML = locked ? "Waiting for opponent…"
     : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">🔷${manaCarried} banked</span>` : ""}`;
   $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}${i>=manaBase?" bank":""}"></span>`).join("");
-  $("ready").textContent = locked ? "Locked in" : "Ready";
-  $("ready").disabled = locked;
+  $("ready").textContent = locked ? "↩ Un-ready" : "Ready";
+  $("ready").disabled = tutorialMode && locked; // in a live match you can always retract; tutorial locks are scripted
+  $("undo").hidden = locked || !craftLog.length; // undo the last combine while still planning
   $("craft").classList.toggle("off", !canAct());
   renderBases(); renderInv(); renderPlan(); renderFoeField();
   if (tutorialMode) highlightTargets(); // re-apply pulse after the re-render
@@ -854,12 +860,27 @@ function craft(){
   for (const k in need) inv[k] -= need[k];   // consume ingredients
   inv[id] = (inv[id]||0) + 1;                // gain the new element
   discover(id);                              // remember this recipe for your Guide
+  craftLog.push({ id, need: Object.assign({}, need) }); // remember it so this combine can be undone
   apSpent++;
   $("hint").textContent = `Crafted ${CARDS[id].name}! (−1 AP)`;
   clear(); updateUI();
   if (tutorialMode) tutOnState();
 }
 function flash(){ $("craft").classList.add("shake"); setTimeout(()=>$("craft").classList.remove("shake"),300); }
+// undo the most recent combine: give back its AP and ingredients, remove the crafted card
+function undoCombine(){
+  if (locked || !craftLog.length) return;
+  const last = craftLog[craftLog.length - 1];
+  if (!(inv[last.id] > 0)){ $("hint").textContent = `Recall ${CARDS[last.id].name} from the field first to undo its craft.`; flash(); return; }
+  inv[last.id]--; if (inv[last.id] <= 0) delete inv[last.id];
+  for (const k in last.need) inv[k] = (inv[k]||0) + last.need[k]; // restore any ingredients it used
+  apSpent--;
+  craftLog.pop();
+  $("hint").textContent = `Undid ${CARDS[last.id].name} (+1 AP)`;
+  updateUI();
+  if (tutorialMode) tutOnState();
+}
+$("undo").onclick = undoCombine;
 
 // ---- inventory: crafted elements you own (click to advance, button to stage this round) ----
 function renderInv(){
@@ -996,7 +1017,12 @@ function doReady(){
   renderTimer();
   updateUI();
 }
-$("ready").onclick = doReady;
+// retract a lock-in (only works while the opponent hasn't also committed — the server confirms with unreadyOk)
+function doUnready(){
+  if (!locked || tutorialMode || !ws || ws.readyState!==1) return;
+  ws.send(JSON.stringify({ type:"unready" }));
+}
+$("ready").onclick = () => { if (locked) doUnready(); else doReady(); };
 
 // ---- round countdown: auto-submits your current plan at 0 so nobody can stall ----
 let timerInt = null, secsLeft = 0;

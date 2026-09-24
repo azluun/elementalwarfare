@@ -525,6 +525,14 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (m.type === "unready") {                    // retract a lock-in while the round is still open
+      if (!me.ready) return;                       // (if both had readied, the round would already have resolved)
+      me.ready = false; me.plan = null; me.reportedLeft = null;
+      send(opp.ws, { type: "foeField", n: 0 });    // clear the opponent's "locked in" indicator
+      send(ws, { type: "unreadyOk" });
+      return;
+    }
+
     if (m.type === "plan") {
       if (me.ready) return;                        // already locked in this round
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
