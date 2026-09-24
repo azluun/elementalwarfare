@@ -119,6 +119,7 @@
   .base small{font-size:10px;color:var(--soft);font-weight:600}
   /* pixel-art element image, sized to sit like an emoji glyph */
   .elglyph{width:1.05em;height:1.05em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
+  .manaicon{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.22em;image-rendering:pixelated;display:inline-block}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
   #undo{padding:6px 10px;font-size:12px;border-color:var(--amber);color:var(--amber);background:var(--panel)}
@@ -507,8 +508,10 @@ const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
 // Each element/card tries a pixel-art image at img/<id>.png; if the file isn't there it falls back to
 // its emoji. So art is managed purely by dropping/renaming PNGs in public/img/ — no code change needed.
 const glyph = (id) => `<img class="elglyph" src="img/${id}.png" alt="${id}" data-e="${EMO(id)}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
-// turn any base-element emoji inside a text string (e.g. card "info") into its pixel-art glyph
-const infoHtml = (s) => String(s).replace(/🔥|💧|🌍|💨/gu, (m) => glyph(Object.keys(BASE).find((k) => BASE[k] === m)));
+// the mana symbol — a pixel-art orb at img/mana.png, falling back to ⚡ until the art is dropped in
+const manaIcon = () => `<img class="manaicon" src="img/mana.png" alt="mana" data-e="⚡" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
+// turn base-element emojis (and the ⚡ mana symbol) inside a text string into their pixel-art icons
+const infoHtml = (s) => String(s).replace(/🔥|💧|🌍|💨|⚡/gu, (m) => m === "⚡" ? manaIcon() : glyph(Object.keys(BASE).find((k) => BASE[k] === m)));
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
@@ -881,7 +884,7 @@ function applyPlayers(players){
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
   $("roundmsg").innerHTML = locked ? "Waiting for opponent…"
-    : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">🔷${manaCarried} banked</span>` : ""}${manaBonus > 0 ? ` · <span style="color:var(--amber)">⚡${manaBonus} charged</span>` : ""}`;
+    : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">🔷${manaCarried} banked</span>` : ""}${manaBonus > 0 ? ` · <span style="color:var(--amber)">${manaIcon()}${manaBonus} charged</span>` : ""}`;
   $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}${i>=manaBase?" bank":""}"></span>`).join("");
   $("ready").textContent = locked ? "↩ Un-ready" : "Ready";
   $("ready").disabled = tutorialMode && locked; // in a live match you can always retract; tutorial locks are scripted
@@ -1182,7 +1185,7 @@ async function startReveal(m){
       showcaseCard(e.card, e.who); await sleep(750);
       const bits = [];
       if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
-      if (e.mana > 0) bits.push(`⚡ +${e.mana} mana`);
+      if (e.mana > 0) bits.push(`${manaIcon()} +${e.mana} mana`);
       CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name} — ${bits.join(" · ")}`);
       await sleep(1300);
     }
@@ -1208,7 +1211,7 @@ async function startReveal(m){
       showcaseCard(e.card, e.who); await sleep(800);
       if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
       if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
-      if (e.mana){ bits.push(`⚡ +${e.mana} mana`); }
+      if (e.mana){ bits.push(`${manaIcon()} +${e.mana} mana`); }
       CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
       shakeBoard();
       await sleep(1300);
@@ -1230,12 +1233,12 @@ function cardStats(id){
   } else if (c.kind === "shield"){
     if (c.blocks) s.push(`<span class="st">🛡️ Block</span>`);
     if (c.heal) s.push(`<span class="st heal">💚 ${c.heal}</span>`);
-    if (c.mana) s.push(`<span class="st">⚡ +${c.mana}</span>`);
+    if (c.mana) s.push(`<span class="st">${manaIcon()} +${c.mana}</span>`);
   } else if (c.kind === "trap"){
     const t = c.trap || {};
     if (t.retaliate) s.push(`<span class="st dmg">💥 ${t.retaliate}</span>`);
     if (t.heal) s.push(`<span class="st heal">💚 ${t.heal}</span>`);
-    if (t.mana) s.push(`<span class="st">⚡ +${t.mana}</span>`);
+    if (t.mana) s.push(`<span class="st">${manaIcon()} +${t.mana}</span>`);
   }
   return s.join("");
 }
@@ -1243,7 +1246,7 @@ function bigCardHTML(id){
   const c = CARDS[id]; if (!c) return "";
   const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Element";
   return `<div class="bigcard ${c.kind}">` +
-    `<div class="bc-top"><span class="bc-type">${kindName}</span><span class="bc-cost" title="1 AP to play">⚡1</span></div>` +
+    `<div class="bc-top"><span class="bc-type">${kindName}</span><span class="bc-cost" title="1 AP to play">${manaIcon()}1</span></div>` +
     `<div class="bc-art">${glyph(id)}</div>` +
     `<div class="bc-name">${c.name}</div>` +
     `<div class="bc-stats">${cardStats(id)}</div>` +
@@ -1362,14 +1365,14 @@ function cardEffects(id){
   } else if (c.kind === "shield"){
     if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${glyph(c.blocks)} ${a.name}</b> — negates its damage`); }
     if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
-    if (c.mana) E("⚡", `Grants <b>+${c.mana}</b> mana next round`);
+    if (c.mana) E(manaIcon(), `Grants <b>+${c.mana}</b> mana next round`);
     if (!c.blocks) E("♻️", `No block — pure recovery`);
   } else if (c.kind === "trap"){
     const tr = c.trap || {};
     E("🪤", `Trap — stays set until it springs; one springs per incoming attack`);
     if (tr.retaliate) E("💥", `Deals <b>${tr.retaliate}</b> damage back to the attacker`);
     if (tr.heal) E("💚", `Heals you <b>${tr.heal}</b> HP`);
-    if (tr.mana) E("⚡", `Charges <b>+${tr.mana}</b> mana next round`);
+    if (tr.mana) E(manaIcon(), `Charges <b>+${tr.mana}</b> mana next round`);
     const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${glyph(k)} ${cc.name}`);
     if (usedIn.length) E("➡️", `Also crafts into: <b>${usedIn.join(", ")}</b>`);
   }
