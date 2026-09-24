@@ -951,16 +951,16 @@ function onCardPointerDown(e, id){
   const c = CARDS[id], startX = e.clientX, startY = e.clientY;
   const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
   let moved = false, longPressed = false;
-  // hold ~450ms without moving -> open the card inspector (and swallow the tap/drag)
+  // hold ~400ms without moving -> pop the big card preview (which then follows the finger); swallow the tap/drag
   const lpTimer = setTimeout(() => {
     if (moved || drag) return;
     longPressed = true;
     try { navigator.vibrate && navigator.vibrate(15); } catch(e){}
-    openCard(id, () => { $("sheet").hidden = true; }); // Back closes straight to the match
-  }, 450);
+    showPreview(id, startX, startY); // the little card, not the full inspector page
+  }, 400);
   const move = (ev) => {
+    if (longPressed){ positionPreview(ev.clientX, ev.clientY); return; } // preview trails the finger while held
     if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8){ moved = true; clearTimeout(lpTimer); }
-    if (longPressed) return;
     if (moved && !drag && playable && canAct() && inv[id] > 0) startDrag(id, c);
     if (drag){ drag.ghost.style.left = ev.clientX + "px"; drag.ghost.style.top = ev.clientY + "px"; }
   };
@@ -968,7 +968,7 @@ function onCardPointerDown(e, id){
     clearTimeout(lpTimer);
     document.removeEventListener("pointermove", move);
     document.removeEventListener("pointerup", up);
-    if (longPressed) return; // inspector opened on hold — don't combine or play
+    if (longPressed){ hidePreview(); return; } // preview was open on hold — release just closes it
     if (drag){ const ok = overField(ev); endDrag(); if (ok) stage(id); }
     else if (!moved) addToSlot(id); // a tap = use it in the combiner
   };
@@ -1205,9 +1205,13 @@ function showPreview(id, cx, topY){
   if (!previewEl){ previewEl = document.createElement("div"); previewEl.id = "cardpreview"; document.body.appendChild(previewEl); }
   previewEl.innerHTML = bigCardHTML(id);
   previewEl.style.display = "block";
+  positionPreview(cx, topY);
+}
+function positionPreview(cx, topY){
+  if (!previewEl) return;
   const r = previewEl.getBoundingClientRect();
-  let left = cx - r.width / 2, top = topY - r.height - 12;         // sit just above the card
-  if (top < 8) top = topY + 74;                                    // no room above → drop below
+  let left = cx - r.width / 2, top = topY - r.height - 12;         // sit just above the card / finger
+  if (top < 8) top = topY + 30;                                    // no room above → drop below
   left = Math.max(8, Math.min(window.innerWidth - r.width - 8, left));
   top = Math.max(8, Math.min(window.innerHeight - r.height - 8, top));
   previewEl.style.left = left + "px"; previewEl.style.top = top + "px";
