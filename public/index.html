@@ -120,6 +120,8 @@
   /* pixel-art element image, sized to sit like an emoji glyph */
   .elglyph{width:1.05em;height:1.05em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
   .manaicon{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.22em;image-rendering:pixelated;display:inline-block}
+  .avicon{width:1.3em;height:1.3em;object-fit:contain;vertical-align:-0.28em;image-rendering:pixelated;display:inline-block}
+  .tierbadge{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.2em;image-rendering:pixelated;display:inline-block}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
   #undo{padding:6px 10px;font-size:12px;border-color:var(--amber);color:var(--amber);background:var(--panel)}
@@ -180,10 +182,23 @@
   .fighter.droptarget{outline:2px dashed var(--accent);outline-offset:2px;background:var(--panel2)}
   body.dragging, body.dragging *{user-select:none!important;-webkit-user-select:none!important;cursor:grabbing!important}
   /* proper (LoR-style) card face — used by the hover preview and the drag ghost */
-  .bigcard{width:172px;box-sizing:border-box;padding:9px 9px 8px;border-radius:16px;text-align:center;color:var(--ink);
+  .bigcard{position:relative;width:172px;box-sizing:border-box;padding:9px 9px 8px;border-radius:16px;text-align:center;color:var(--ink);
     font-family:var(--body);background:linear-gradient(165deg,var(--panel2),var(--panel));border:2px solid var(--line);
     box-shadow:0 12px 34px rgba(0,0,0,.55)}
   .bigcard.attack{border-color:var(--foe)} .bigcard.shield{border-color:var(--shield)} .bigcard.trap{border-color:var(--trap)}
+  .bigcard .bc-body{position:relative;z-index:1}       /* content sits above the background art */
+  /* optional card-BACKGROUND art — drop img/cardbg-attack.png / -shield / -trap (172x230); invisible until then */
+  .bigcard .bc-bg{position:absolute;inset:0;border-radius:14px;z-index:0;pointer-events:none;
+    background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.55}
+  .bigcard.attack .bc-bg{background-image:url(img/cardbg-attack.png)}
+  .bigcard.shield .bc-bg{background-image:url(img/cardbg-shield.png)}
+  .bigcard.trap   .bc-bg{background-image:url(img/cardbg-trap.png)}
+  /* optional card-BORDER/frame art — drop img/frame-attack.png / -shield / -trap (172x230, transparent centre) */
+  .bigcard .bc-frame{position:absolute;inset:0;z-index:3;pointer-events:none;
+    background-size:100% 100%;background-repeat:no-repeat}
+  .bigcard.attack .bc-frame{background-image:url(img/frame-attack.png)}
+  .bigcard.shield .bc-frame{background-image:url(img/frame-shield.png)}
+  .bigcard.trap   .bc-frame{background-image:url(img/frame-trap.png)}
   .bigcard .bc-top{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px}
   .bigcard .bc-type{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
   .bigcard.attack .bc-type{color:var(--foe)} .bigcard.shield .bc-type{color:var(--shield)} .bigcard.trap .bc-type{color:var(--trap)}
@@ -716,6 +731,10 @@ const ICONS = {
   archmage:{ name:"Archmage", price:25, em:"🧙" },
 };
 const iconEm = (id) => (ICONS[id] || ICONS.default).em;
+// drop-in art: try a PNG, fall back to the emoji. Manage purely by adding named files to public/img/.
+const artOr = (src, emoji, cls) => `<img class="${cls}" src="${src}" alt="" data-e="${emoji}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
+const iconGlyph = (id) => artOr(`img/icon-${id}.png`, iconEm(id), "avicon");   // profile avatar
+const tierGlyph = (t)  => artOr(`img/tier-${t.id}.png`, t.em, "tierbadge");    // rank badge
 // name colours (rainbow is an animated gradient handled via a CSS class)
 const NAME_COLORS = {
   default: { name:"Default", price:0,  color:null },
@@ -756,9 +775,9 @@ function applySkin(){ // recolour your own cards to the equipped skin (no gamepl
 function refreshProfileBox(){
   if (!profile) return;
   const r = profile.rating || 1000, t = tierOf(r);
-  $("pname").textContent = `${iconEm(profile.icon)} ${profile.name}`; applyNameColor($("pname"), profile.nameColor, t.color);
+  $("pname").innerHTML = `${iconGlyph(profile.icon)} ${esc(profile.name)}`; applyNameColor($("pname"), profile.nameColor, t.color);
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
-  $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
+  $("precord").innerHTML = `${tierGlyph(t)} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
   $("pcoins").textContent = `🪙 ${profile.coins || 0}`;
   $("admin").hidden = !profile.dev; // dev-only profile tools
 }
@@ -861,11 +880,11 @@ function newRound(m){
   startTimer(m.seconds);
 }
 function fighterLabel(p, you){
-  const ic = `${iconEm(p.icon || "default")} `, nm = esc(p.name);
+  const ic = `${iconGlyph(p.icon || "default")} `, nm = esc(p.name);
   if (p.rating == null) return ic + nameHTML(nm, p.nameColor, null) + (you ? " (you)" : "");
   const t = tierOf(p.rating);
   const title = p.title && TITLES[p.title] ? ` <span style="color:${titleColor(p.title, t.color)}">${TITLES[p.title]}</span>` : "";
-  return `${ic}${nameHTML(nm, p.nameColor, t.color)}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}</span><span style="font-size:11px">${title}</span>`;
+  return `${ic}${nameHTML(nm, p.nameColor, t.color)}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${tierGlyph(t)}</span><span style="font-size:11px">${title}</span>`;
 }
 function applyPlayers(players){
   const me = players[myslot], foe = players[1-myslot];
@@ -1248,12 +1267,16 @@ function bigCardHTML(id){
   const c = CARDS[id]; if (!c) return "";
   const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Element";
   return `<div class="bigcard ${c.kind}">` +
-    `<div class="bc-top"><span class="bc-type">${kindName}</span><span class="bc-cost" title="1 AP to play">${manaIcon()}1</span></div>` +
-    `<div class="bc-art">${glyph(id)}</div>` +
-    `<div class="bc-name">${c.name}</div>` +
-    `<div class="bc-stats">${cardStats(id)}</div>` +
-    `<div class="bc-info">${infoHtml(c.info)}</div>` +
-    `<div class="bc-recipe">${ingredients(c)}</div>` +
+    `<div class="bc-bg"></div>` +      // optional card-background art (img/cardbg-<kind>.png) — invisible until added
+    `<div class="bc-body">` +
+      `<div class="bc-top"><span class="bc-type">${kindName}</span><span class="bc-cost" title="1 AP to play">${manaIcon()}1</span></div>` +
+      `<div class="bc-art">${glyph(id)}</div>` +
+      `<div class="bc-name">${c.name}</div>` +
+      `<div class="bc-stats">${cardStats(id)}</div>` +
+      `<div class="bc-info">${infoHtml(c.info)}</div>` +
+      `<div class="bc-recipe">${ingredients(c)}</div>` +
+    `</div>` +
+    `<div class="bc-frame"></div>` +   // optional card-border/frame art (img/frame-<kind>.png) — invisible until added
   `</div>`;
 }
 // hover preview: a pinned big card that appears above the hovered card (desktop / any device with a hover pointer)
@@ -1411,8 +1434,8 @@ function openLeaderboard(){
     const rows = (d.top || []).map((p, i) => {
       const t = tierOf(p.rating), mine = p.name === me ? ' style="background:var(--panel2)"' : "";
       return `<div class="crow"${mine}><span style="width:26px;color:var(--soft)">#${i+1}</span>` +
-        `<span class="a">${iconEm(p.icon)} ${nameHTML(esc(p.name), p.nameColor, "var(--ink)")}</span>` +
-        `<span>${t.em} ${p.rating}</span><span class="s" style="color:var(--soft)">${p.wins}W/${p.losses}L</span></div>`;
+        `<span class="a">${iconGlyph(p.icon)} ${nameHTML(esc(p.name), p.nameColor, "var(--ink)")}</span>` +
+        `<span>${tierGlyph(t)} ${p.rating}</span><span class="s" style="color:var(--soft)">${p.wins}W/${p.losses}L</span></div>`;
     }).join("");
     $("sheetbody").innerHTML = rows || `<p class="sheetnote">No ranked players yet — win a match to claim the top spot!</p>`;
   }).catch(() => { $("sheetbody").innerHTML = `<p class="sheetnote">Couldn't load the leaderboard.</p>`; });
@@ -1537,7 +1560,7 @@ function openIconShop(){
   for (const [id, s] of Object.entries(ICONS)){
     const isOwned = id === "default" || owned.has(id);
     const isEq = eqp === id;
-    const av = `<span style="font-size:26px;width:34px;text-align:center;flex-shrink:0">${s.em}</span>`;
+    const av = `<span style="font-size:26px;width:34px;text-align:center;flex-shrink:0">${iconGlyph(id)}</span>`;
     const ctrl = isEq ? `<button disabled>Equipped</button>`
       : isOwned ? `<button data-icon="${id}" data-act="equip">Equip</button>`
       : `<button data-icon="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
