@@ -148,6 +148,29 @@
   .dragghost .em{font-size:28px;line-height:1}
   .fighter.droptarget{outline:2px dashed var(--accent);outline-offset:2px;background:var(--panel2)}
   body.dragging, body.dragging *{user-select:none!important;-webkit-user-select:none!important;cursor:grabbing!important}
+  /* proper (LoR-style) card face — used by the hover preview and the drag ghost */
+  .bigcard{width:172px;box-sizing:border-box;padding:9px 9px 8px;border-radius:16px;text-align:center;color:var(--ink);
+    font-family:var(--body);background:linear-gradient(165deg,var(--panel2),var(--panel));border:2px solid var(--line);
+    box-shadow:0 12px 34px rgba(0,0,0,.55)}
+  .bigcard.attack{border-color:var(--foe)} .bigcard.shield{border-color:var(--shield)} .bigcard.trap{border-color:var(--trap)}
+  .bigcard .bc-top{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px}
+  .bigcard .bc-type{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+  .bigcard.attack .bc-type{color:var(--foe)} .bigcard.shield .bc-type{color:var(--shield)} .bigcard.trap .bc-type{color:var(--trap)}
+  .bigcard .bc-cost{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 6px;border-radius:10px;
+    background:var(--amber);color:#241a08;font-size:11px;font-weight:800}
+  .bigcard .bc-art{height:104px;display:flex;align-items:center;justify-content:center;font-size:82px;border-radius:12px;
+    border:1px solid var(--line);background:radial-gradient(circle at 50% 42%,rgba(255,255,255,.09),transparent 68%),var(--cardbg)}
+  .bigcard .bc-art .elglyph{width:1.05em;height:1.05em;image-rendering:pixelated;vertical-align:middle}
+  .bigcard .bc-name{font-family:var(--dsp);font-size:16px;font-weight:600;margin-top:6px;line-height:1.1}
+  .bigcard .bc-stats{display:flex;justify-content:center;gap:8px;margin-top:5px;flex-wrap:wrap;min-height:8px}
+  .bigcard .bc-stats .st{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:800;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px 7px}
+  .bigcard .bc-stats .st.dmg{color:var(--foe)} .bigcard .bc-stats .st.heal{color:var(--you)}
+  .bigcard .bc-info{font-size:10.5px;color:var(--soft);margin-top:6px;line-height:1.32;min-height:14px}
+  .bigcard .bc-recipe{font-size:9.5px;color:var(--soft);opacity:.85;border-top:1px solid var(--line);margin-top:7px;padding-top:5px}
+  #cardpreview{position:fixed;z-index:60;pointer-events:none;display:none;animation:cardpop .12s ease-out}
+  @keyframes cardpop{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+  .dragghost.big{background:none;border:none;box-shadow:none;padding:0;transform:translate(-50%,-50%) rotate(-4deg) scale(1.03)}
 
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
   .shake{animation:shake .3s}
@@ -884,6 +907,7 @@ $("undo").onclick = undoCombine;
 
 // ---- inventory: crafted elements you own (click to advance, button to stage this round) ----
 function renderInv(){
+  hidePreview(); // re-render can orphan a hovered card; drop any stale preview
   const h = $("hand");
   const ids = Object.keys(inv).filter(k => inv[k] > 0);
   if (!ids.length){ h.innerHTML = `<div class="emptyhand">No elements yet. Combine two above — crafted elements land here to advance or stage.</div>`; return; }
@@ -893,6 +917,7 @@ function renderInv(){
     const el = document.createElement("div");
     el.className = "card " + c.kind;
     el.dataset.id = id;
+    el.dataset.cardPreview = id; // hover (desktop) shows the full-size card
     el.title = "Click to add to the combiner";
     el.innerHTML = `<span class="em">${glyph(id)}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${infoHtml(c.info)}</span>`;
     const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
@@ -951,9 +976,10 @@ function onCardPointerDown(e, id){
   document.addEventListener("pointerup", up);
 }
 function startDrag(id, c){
+  hidePreview(); // the drag ghost takes over from the hover preview
   const g = document.createElement("div");
-  g.className = "dragghost";
-  g.innerHTML = `<span class="em">${glyph(id)}</span><span>${c.name}</span>`;
+  g.className = "dragghost big";
+  g.innerHTML = bigCardHTML(id);
   document.body.appendChild(g);
   drag = { id, ghost: g };
   document.body.classList.add("dragging"); // suppress text selection page-wide during the drag
@@ -980,6 +1006,7 @@ function renderPlan(){
     const c = CARDS[d.card];
     const t = document.createElement("div");
     t.className = "playtile " + d.k;
+    t.dataset.cardPreview = d.card; // hover to see the full card
     t.innerHTML = `<span class="em">${glyph(d.card)}</span><span class="nm">${c.name}</span>`;
     if (!locked){ const x=document.createElement("button"); x.className="rm"; x.textContent="✕"; x.title="recall"; x.onclick=()=>unstage(idx); t.appendChild(x); }
     p.appendChild(t);
@@ -1139,6 +1166,67 @@ async function startReveal(m){
 // ---- Guide (discovered recipes only) & Recipe Book (all) ----
 const CAP = (s) => s[0].toUpperCase() + s.slice(1);
 const ingredients = (c) => c.recipe.map((r) => `${glyph(r)} ${BASE[r] ? CAP(r) : CARDS[r].name}`).join(" + ");
+
+// ---- "proper" full-size card face (LoR-style), shared by the hover preview and the drag ghost ----
+function cardStats(id){
+  const c = CARDS[id], s = [];
+  if (c.kind === "attack"){
+    s.push(`<span class="st dmg">⚔️ ${c.dmg}</span>`);
+    if (c.disable) s.push(`<span class="st">⛔ ${glyph(c.disable)}</span>`);
+  } else if (c.kind === "shield"){
+    if (c.blocks) s.push(`<span class="st">🛡️ Block</span>`);
+    if (c.heal) s.push(`<span class="st heal">💚 ${c.heal}</span>`);
+    if (c.restore || c.restoreAll) s.push(`<span class="st">✨ Restore</span>`);
+  } else if (c.kind === "trap"){
+    const t = c.trap || {};
+    if (t.retaliate) s.push(`<span class="st dmg">💥 ${t.retaliate}</span>`);
+    if (t.heal) s.push(`<span class="st heal">💚 ${t.heal}</span>`);
+    if (t.disable) s.push(`<span class="st">⛔ Shock</span>`);
+  }
+  return s.join("");
+}
+function bigCardHTML(id){
+  const c = CARDS[id]; if (!c) return "";
+  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Element";
+  return `<div class="bigcard ${c.kind}">` +
+    `<div class="bc-top"><span class="bc-type">${kindName}</span><span class="bc-cost" title="1 AP to play">⚡1</span></div>` +
+    `<div class="bc-art">${glyph(id)}</div>` +
+    `<div class="bc-name">${c.name}</div>` +
+    `<div class="bc-stats">${cardStats(id)}</div>` +
+    `<div class="bc-info">${infoHtml(c.info)}</div>` +
+    `<div class="bc-recipe">${ingredients(c)}</div>` +
+  `</div>`;
+}
+// hover preview: a pinned big card that appears above the hovered card (desktop / any device with a hover pointer)
+const HOVER = !!(window.matchMedia && window.matchMedia("(hover:hover)").matches);
+let previewEl = null;
+function showPreview(id, cx, topY){
+  if (!id || !CARDS[id]) return hidePreview();
+  if (!previewEl){ previewEl = document.createElement("div"); previewEl.id = "cardpreview"; document.body.appendChild(previewEl); }
+  previewEl.innerHTML = bigCardHTML(id);
+  previewEl.style.display = "block";
+  const r = previewEl.getBoundingClientRect();
+  let left = cx - r.width / 2, top = topY - r.height - 12;         // sit just above the card
+  if (top < 8) top = topY + 74;                                    // no room above → drop below
+  left = Math.max(8, Math.min(window.innerWidth - r.width - 8, left));
+  top = Math.max(8, Math.min(window.innerHeight - r.height - 8, top));
+  previewEl.style.left = left + "px"; previewEl.style.top = top + "px";
+}
+function hidePreview(){ if (previewEl) previewEl.style.display = "none"; }
+if (HOVER){
+  document.addEventListener("mouseover", (e) => {
+    if (drag) return;
+    const el = e.target.closest("[data-card-preview]");
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    showPreview(el.getAttribute("data-card-preview"), r.left + r.width / 2, r.top);
+  });
+  document.addEventListener("mouseout", (e) => {
+    const el = e.target.closest("[data-card-preview]");
+    if (el && !el.contains(e.relatedTarget)) hidePreview();
+  });
+}
+document.addEventListener("pointerdown", hidePreview, true); // never leave a preview stuck when an interaction begins
 function renderSheet(mode){
   const known = mode === "known";
   const total = Object.keys(CARDS).length;
