@@ -279,6 +279,7 @@ function stateOf(room) {
       icon: p.icon || "default",
       nameColor: p.nameColor || "default",
       back: p.cardBack || "default",
+      skin: p.cardSkin || "default",    // card-background skin, so the reveal showcase can use the owner's skin
       rating: p.rating != null ? p.rating : null,
     };
   });
@@ -290,7 +291,8 @@ function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
   const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
     playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", icon: prof ? (prof.icon || "default") : "default",
-    nameColor: prof ? (prof.nameColor || "default") : "default", cardBack: prof ? (prof.cardBack || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
+    nameColor: prof ? (prof.nameColor || "default") : "default", cardBack: prof ? (prof.cardBack || "default") : "default",
+    cardSkin: prof ? (prof.cardSkin || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
@@ -509,9 +511,10 @@ wss.on("connection", (ws) => {
     if (!opp || me.hp <= 0 || opp.hp <= 0) return; // match not live
 
     if (m.type === "field") {
-      if (me.ready) return;                        // once locked in, the count is frozen
-      const n = Math.max(0, Math.min(16, (m.n | 0))); // how many cards we currently have on the field
-      send(opp.ws, { type: "foeField", n });        // relay the live count (backs only, never the cards)
+      if (me.ready) return;                        // once locked in, the set is frozen
+      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap") ? k : "attack";
+      const kinds = Array.isArray(m.kinds) ? m.kinds.slice(0, 16).map(KIND) : []; // per-card KIND only — never the card itself
+      send(opp.ws, { type: "foeField", kinds });   // opponent sees oriented face-down backs (shields sideways), never identities
       return;
     }
 
@@ -528,7 +531,7 @@ wss.on("connection", (ws) => {
     if (m.type === "unready") {                    // retract a lock-in while the round is still open
       if (!me.ready) return;                       // (if both had readied, the round would already have resolved)
       me.ready = false; me.plan = null; me.reportedLeft = null;
-      send(opp.ws, { type: "foeField", n: 0 });    // clear the opponent's "locked in" indicator
+      send(opp.ws, { type: "foeField", kinds: [] }); // clear the opponent's "locked in" indicator
       send(ws, { type: "unreadyOk" });
       return;
     }
@@ -538,8 +541,10 @@ wss.on("connection", (ws) => {
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
       me.reportedLeft = Math.max(0, m.left | 0);   // client's true unspent mana (counts crafts, not just plays)
       me.ready = true;
-      // tell the opponent HOW MANY cards were committed (face-down backs) — never which cards
-      send(opp.ws, { type: "oppReady", count: me.plan.deploys.length });
+      // tell the opponent the KIND of each committed card (for orientation) — never which card
+      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap") ? k : "attack";
+      const kinds = me.plan.deploys.map((d) => KIND(d.k));
+      send(opp.ws, { type: "oppReady", count: kinds.length, kinds });
       if (opp.isBot) botPlan(room, opp);
       if (room.players.every((p) => p.ready)) resolveRound(room);
     }

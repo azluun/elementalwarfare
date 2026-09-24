@@ -51,34 +51,60 @@
   .foecount{font-size:12px;color:var(--soft)}
   .lockwarn{color:var(--foe);font-size:12px;margin-top:4px;min-height:15px}
 
-  /* ---- the playing field: your card-table, right above the hand for one-handed play ---- */
-  .field{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;
-    display:flex;flex-direction:column;gap:6px;transition:outline .12s,background .12s}
-  .field.droptarget{outline:2px dashed var(--accent);outline-offset:2px;background:var(--panel2)}
-  .fieldrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;min-height:44px}
-  .fieldline{display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;color:var(--soft);
-    letter-spacing:.05em;text-transform:uppercase;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:3px 0}
-  .fieldempty{font-size:11px;color:var(--soft);text-align:center}
-  .playtile{width:48px;height:60px;border-radius:10px;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:2px;border:1px solid var(--line);background:var(--cardbg);position:relative}
-  .playtile .em{font-size:23px;line-height:1}
-  .playtile .nm{font-size:9px;font-weight:700;text-align:center;line-height:1.05}
-  .playtile.attack{border-color:var(--foe)} .playtile.shield{border-color:var(--shield)} .playtile.trap{border-color:var(--trap)}
-  .playtile .rm{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--panel);
-    border:1px solid var(--line);color:var(--soft);font-size:11px;line-height:1;text-align:center;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+  /* ---- the board: one big Yu-Gi-Oh-style playfield with corner HP badges ---- */
+  .board{position:relative;border:1px solid var(--line);border-radius:16px;padding:46px 10px 48px;
+    display:flex;flex-direction:column;gap:8px;min-height:300px;overflow:hidden;
+    transition:outline .12s;background:
+      radial-gradient(120% 78% at 50% 0%,rgba(226,86,79,.07),transparent 60%),
+      radial-gradient(120% 78% at 50% 100%,rgba(84,180,131,.09),transparent 60%),var(--panel)}
+  .board.droptarget{outline:2px dashed var(--accent);outline-offset:-3px}
+  .board.hitshake{animation:shake .32s}
+  .hpbadge{position:absolute;left:8px;right:8px;display:flex;align-items:center;gap:8px;padding:5px 10px;z-index:3;
+    background:rgba(16,19,16,.66);border:1px solid var(--line);border-radius:11px;backdrop-filter:blur(3px)}
+  .hpbadge.foe{top:8px} .hpbadge.me{bottom:8px}
+  .hpbadge .bname{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .hpbadge.foe .bname{color:var(--foe)} .hpbadge.me .bname{color:var(--you)}
+  .hpbadge .bhpnum{font-family:var(--dsp);font-size:19px;font-variant-numeric:tabular-nums;min-width:26px;text-align:right}
+  .hpbadge .bbar{width:70px;height:7px;border-radius:5px;background:var(--bg);overflow:hidden;border:1px solid var(--line);flex-shrink:0}
+  .hpbadge .bbar>div{height:100%;transition:width .3s}
+  .hpbadge.foe .bbar>div{background:var(--foe)} .hpbadge.me .bbar>div{background:var(--you)}
+  .hpbadge .bshields{font-size:10.5px;color:var(--soft);white-space:nowrap}
+  .hpbadge.me .bshields{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;max-width:120px}
+  .zone{display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:center;min-height:82px;position:relative;z-index:1}
+  .fieldempty{font-size:11px;color:var(--soft);text-align:center;width:100%}
+  .clash{min-height:34px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--soft);
+    letter-spacing:.04em;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:4px 6px;z-index:2}
+  .clash .hit{color:var(--foe);font-weight:800} .clash .blk{color:var(--shield);font-weight:800} .clash b{color:var(--ink)}
+  /* a card placed on the field — portrait = attack/trap, landscape (.def) = shield in defense position */
+  .setcard{width:52px;height:70px;border-radius:9px;border:1px solid var(--line);background:var(--cardbg);position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-shadow:0 3px 8px rgba(0,0,0,.35);
+    transition:transform .2s ease}
+  .setcard.def{width:70px;height:52px}
+  .setcard .sc-art{font-size:27px;line-height:1}
+  .setcard .sc-nm{font-size:8.5px;font-weight:700;text-align:center;line-height:1.03;max-width:100%;padding:0 2px}
+  .setcard.def .sc-nm{display:none}
+  .setcard.attack{border-color:var(--foe)} .setcard.shield{border-color:var(--shield)} .setcard.trap{border-color:var(--trap)}
+  .setcard .rm{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--panel);
+    border:1px solid var(--line);color:var(--soft);font-size:11px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;z-index:2}
+  .setcard.back{color:rgba(233,236,223,.5);font-size:17px;
+    background:repeating-linear-gradient(45deg,var(--panel2),var(--panel2) 5px,#26331f 5px,#26331f 10px)}
+  .setcard.back .sc-nm{display:none}
+  .setcard.flip{transform:rotateY(90deg)}
+  @keyframes setdrop{from{opacity:0;transform:translateY(-14px) scale(.85)}to{opacity:1;transform:none}}
+  .setcard.drop{animation:setdrop .28s ease-out}
   .cardback{width:40px;height:56px;border-radius:9px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
     font-size:17px;color:rgba(233,236,223,.5);
     background:repeating-linear-gradient(45deg,var(--panel2),var(--panel2) 5px,#26331f 5px,#26331f 10px)}
   .foelabel{width:100%;font-size:11px;color:var(--soft);text-align:center;margin-bottom:1px}
-  /* animated card backs (cosmetic) */
+  /* animated card backs (cosmetic) — applied to both the shop swatch and the opponent's set cards */
   @keyframes cbpulse{0%,100%{box-shadow:0 0 0 0 rgba(84,180,131,0)}50%{box-shadow:0 0 9px 1px rgba(84,180,131,.65)}}
-  .cardback.pulse{animation:cbpulse 1.4s ease-in-out infinite}
+  .cardback.pulse,.setcard.back.pulse{animation:cbpulse 1.4s ease-in-out infinite}
   @keyframes cbshimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .cardback.shimmer{background:linear-gradient(110deg,var(--panel2) 30%,#3a5a44 50%,var(--panel2) 70%);background-size:200% 100%;animation:cbshimmer 1.4s linear infinite}
+  .cardback.shimmer,.setcard.back.shimmer{background:linear-gradient(110deg,var(--panel2) 30%,#3a5a44 50%,var(--panel2) 70%);background-size:200% 100%;animation:cbshimmer 1.4s linear infinite}
   @keyframes cbember{0%,100%{background-color:#2a1a12;box-shadow:inset 0 0 8px rgba(224,120,60,.35)}50%{background-color:#3b2214;box-shadow:inset 0 0 13px rgba(255,140,60,.75)}}
-  .cardback.ember{background:#2a1a12;animation:cbember 1.1s ease-in-out infinite}
+  .cardback.ember,.setcard.back.ember{background:#2a1a12;animation:cbember 1.1s ease-in-out infinite}
   @keyframes cbaurora{0%{background-position:0 0}100%{background-position:200% 0}}
-  .cardback.aurora{background:linear-gradient(90deg,#153b4a,#3a2a6a,#1a5a44,#153b4a);background-size:200% 100%;animation:cbaurora 3.2s linear infinite}
+  .cardback.aurora,.setcard.back.aurora{background:linear-gradient(90deg,#153b4a,#3a2a6a,#1a5a44,#153b4a);background-size:200% 100%;animation:cbaurora 3.2s linear infinite}
   /* rainbow name colour */
   @keyframes rainbowmove{0%{background-position:0% 50%}100%{background-position:200% 50%}}
   .rainbow-text{background:linear-gradient(90deg,#e2564f,#f5c542,#54d1a0,#4fb3ff,#b98cff,#e2564f);background-size:200% auto;
@@ -170,6 +196,13 @@
   .bigcard .bc-recipe{font-size:9.5px;color:var(--soft);opacity:.85;border-top:1px solid var(--line);margin-top:7px;padding-top:5px}
   #cardpreview{position:fixed;z-index:60;pointer-events:none;display:none;animation:cardpop .12s ease-out}
   @keyframes cardpop{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+  /* reveal showcase: the attack card leaps to the middle of the screen for a beat */
+  #showcase{position:fixed;left:50%;top:44%;z-index:70;pointer-events:none;display:none;
+    transform:translate(-50%,-50%) scale(.55) rotate(-6deg);opacity:0;
+    transition:opacity .16s ease,transform .3s cubic-bezier(.2,1.35,.4,1)}
+  #showcase.in{opacity:1;transform:translate(-50%,-50%) scale(1.25) rotate(0)}
+  #showcase .bigcard{box-shadow:0 20px 60px rgba(0,0,0,.72)}
+  #showcase .sc-owner{position:absolute;top:-24px;left:0;right:0;text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em}
   .dragghost.big{background:none;border:none;box-shadow:none;padding:0;transform:translate(-50%,-50%) rotate(-4deg) scale(1.03)}
 
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
@@ -288,10 +321,11 @@
     .card .cd2{font-size:9px}
     .card .playhint{font-size:9px}
     .planstrip{min-height:26px;padding:6px 10px}
-    .field{padding:7px;gap:5px}
-    .fieldrow{min-height:40px}
-    .playtile{width:44px;height:54px}
-    .playtile .em{font-size:21px}
+    .board{padding:42px 7px 44px}
+    .zone{min-height:70px;gap:5px}
+    .setcard{width:46px;height:62px} .setcard.def{width:62px;height:46px}
+    .setcard .sc-art{font-size:23px}
+    .hpbadge .bbar{width:56px}
     .cardback{width:36px;height:50px}
     .tut-on .wrap{padding-bottom:96px}
     #coach{padding:11px 13px calc(11px + env(safe-area-inset-bottom,0px))}
@@ -356,16 +390,25 @@
 
   <!-- ARENA -->
   <div class="arena" id="arena">
-    <div class="fighter foe">
-      <div class="top"><span class="name" id="foename">Opponent</span><span id="foehp">30</span></div>
-      <div class="hpwrap"><div class="hp" id="foebar" style="width:100%"></div></div>
-      <div class="foecount" id="foeshields">Shields: 0</div>
-    </div>
+    <!-- one big Yu-Gi-Oh-style board: corner HP badges, foe's set cards up top, yours at the bottom -->
+    <div class="board" id="field">
+      <div class="hpbadge foe" id="foebadge">
+        <span class="bname" id="foename">Opponent</span>
+        <span class="bhpnum" id="foehp">30</span>
+        <div class="bbar"><div id="foebar" style="width:100%"></div></div>
+        <span class="bshields" id="foeshields">Shields: 0</span>
+      </div>
 
-    <div class="fighter me">
-      <div class="top"><span class="name" id="myname">You</span><span id="myhp">30</span></div>
-      <div class="hpwrap"><div class="hp" id="mybar" style="width:100%"></div></div>
-      <div class="shields" id="myshields"></div>
+      <div class="zone foe" id="fieldfoe"></div>
+      <div class="clash" id="clash"><span id="clashmsg">⚔️ THE FIELD</span></div>
+      <div class="zone me" id="fieldme"></div>
+
+      <div class="hpbadge me" id="mybadge">
+        <span class="bname" id="myname">You</span>
+        <span class="bhpnum" id="myhp">30</span>
+        <div class="bbar"><div id="mybar" style="width:100%"></div></div>
+        <span class="bshields" id="myshields"></span>
+      </div>
       <div class="lockwarn" id="lockwarn"></div>
     </div>
 
@@ -383,12 +426,6 @@
         <button id="undo" hidden title="Undo the last combine">↩ Undo</button>
       </div>
       <div class="hint" id="hint">Tap two elements to craft (1 AP). Drag a card up into the field to play it (1 AP).</div>
-    </div>
-
-    <div class="field" id="field">
-      <div class="fieldrow foe" id="fieldfoe"></div>
-      <div class="fieldline"><span>⚔️ the field</span></div>
-      <div class="fieldrow me" id="fieldme"></div>
     </div>
 
     <div class="hand" id="hand"></div>
@@ -733,8 +770,8 @@ function handle(m){
   if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
   if (m.type === "resolve") { startReveal(m); }
   if (m.type === "over")    { if (animating) pendingOver = m; else showOver(m); }
-  if (m.type === "foeField"){ foeStaged = m.n; foeLocked = false; renderFoeField(); } // opponent played/cancelled a card — live count (backs only)
-  if (m.type === "oppReady"){ foeStaged = m.count; foeLocked = true; renderFoeField(); } // opponent locked in N cards
+  if (m.type === "foeField"){ foeKinds = m.kinds || []; foeStaged = foeKinds.length; foeLocked = false; renderFoeField(); } // opponent set/recalled a card — live, oriented backs
+  if (m.type === "oppReady"){ foeKinds = m.kinds || []; foeStaged = foeKinds.length; foeLocked = true; renderFoeField(); }        // opponent locked in
   if (m.type === "unreadyOk"){ locked = false; updateUI(); sendFieldCount(); } // our lock-in was retracted — reopen planning
 }
 function showOver(m){
@@ -789,15 +826,16 @@ function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElem
 let round = 0, apBudget = 0, apSpent = 0, plan = [], locked = false, myDisabled = new Set();
 let craftLog = []; // stack of this round's crafts {id, need} so the last combine can be undone
 let manaBase = 2, manaCarried = 0, manaNextCap = 0; // this round's base mana, mana banked from before, and how much can bank forward
-let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent", foeBack = "default";
-let foeStaged = 0;     // how many cards the opponent has on the field this round (updates live), shown as face-down backs
+let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30], foeName = "Opponent", foeBack = "default", foeSkin = "default";
+let foeStaged = 0;      // how many cards the opponent has set this round (updates live)
+let foeKinds = [];      // the KIND of each (attack/shield/trap) so we can orient the face-down backs — never the identity
 let foeLocked = false;  // has the opponent hit Ready (committed) this round?
 const apLeft = () => apBudget - apSpent;
 const canAct = () => !locked && apLeft() > 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function newRound(m){
-  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; craftLog = []; locked = false; foeStaged = 0; foeLocked = false;
+  round = m.round; apBudget = m.ap; apSpent = 0; plan = []; craftLog = []; locked = false; foeStaged = 0; foeKinds = []; foeLocked = false;
   manaBase = m.base != null ? m.base : apBudget; manaCarried = m.carried || 0; manaNextCap = m.nextCap || 0;
   applyPlayers(m.players);
   slots = [null,null]; renderSlots();
@@ -824,7 +862,7 @@ function applyPlayers(players){
   myDisabled = new Set(me.disabled || []);
   $("lockwarn").innerHTML = myDisabled.size ? `⛔ ${[...myDisabled].map(glyph).join(" ")} disabled this round` : "";
   shownHp = [players[0].hp, players[1].hp];
-  foeName = foe.name; foeBack = foe.back || "default";
+  foeName = foe.name; foeBack = foe.back || "default"; foeSkin = foe.skin || "default";
 }
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
@@ -985,10 +1023,10 @@ function startDrag(id, c){
   document.body.classList.add("dragging"); // suppress text selection page-wide during the drag
   $("field").classList.add("droptarget");
 }
-// drop is valid over the field — and, leniently, over either fighter panel too
+// drop is valid anywhere on the board
 function overField(ev){
   const el = document.elementFromPoint(ev.clientX, ev.clientY);
-  return !!(el && (el.closest("#field") || el.closest(".fighter")));
+  return !!(el && el.closest("#field"));
 }
 function endDrag(){
   if (!drag) return;
@@ -997,37 +1035,38 @@ function endDrag(){
   document.querySelectorAll(".droptarget").forEach((e) => e.classList.remove("droptarget"));
   drag = null;
 }
-// your played cards, face-up on your side of the field
+// orientation class: shields lie sideways (defense position), attacks & traps sit upright
+const posClass = (kind) => kind === "shield" ? " def" : "";
+// your set cards — face-up to you, oriented YGO-style, on your side of the board
 function renderPlan(){
   const p = $("fieldme");
-  if (!plan.length){ p.innerHTML = `<span class="fieldempty">Drag a card up here to play it — attack or defend</span>`; return; }
+  if (!plan.length){ p.innerHTML = `<span class="fieldempty">Drag a card up here to set it — attack, trap or defense</span>`; return; }
   p.innerHTML = "";
   plan.forEach((d, idx) => {
     const c = CARDS[d.card];
     const t = document.createElement("div");
-    t.className = "playtile " + d.k;
-    t.dataset.cardPreview = d.card; // hover to see the full card
-    t.innerHTML = `<span class="em">${glyph(d.card)}</span><span class="nm">${c.name}</span>`;
+    t.className = "setcard mine " + d.k + posClass(d.k);
+    t.dataset.cardPreview = d.card; // hover / long-press to see the full card
+    t.innerHTML = `<span class="sc-art">${glyph(d.card)}</span><span class="sc-nm">${c.name}</span>`;
     if (!locked){ const x=document.createElement("button"); x.className="rm"; x.textContent="✕"; x.title="recall"; x.onclick=()=>unstage(idx); t.appendChild(x); }
     p.appendChild(t);
   });
 }
-// the opponent's side of the field — face-down backs update live as they play/cancel; you see HOW MANY, never which
+// the opponent's side — oriented FACE-DOWN backs (shields sideways), never the identity; you only ever see kind + count
 function renderFoeField(){
   const f = $("fieldfoe");
   if (tutorialMode){ f.innerHTML = `<span class="fieldempty">🎯 Practice Dummy</span>`; return; }
-  const n = foeStaged || 0;
-  if (n === 0){
-    f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} locked in — no cards played` : `🂠 ${foeName} is planning…`}</span>`;
+  const kinds = foeKinds || [];
+  if (!kinds.length){
+    f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} — no cards set` : `🂠 ${foeName} is planning…`}</span>`;
     return;
   }
-  const label = foeLocked ? `🔒 ${foeName} locked in ${n} card${n>1?"s":""}`
-                          : `🂠 ${foeName} is planning — ${n} on the field`;
-  f.innerHTML = `<span class="foelabel">${label}</span>` +
-    Array.from({length: n}).map(() => `<div class="cardback ${foeBack !== "default" ? foeBack : ""}">?</div>`).join("");
+  const skin = foeBack !== "default" ? " " + foeBack : "";
+  f.innerHTML = `<span class="foelabel">${foeLocked ? `🔒 ${foeName} locked in ${kinds.length}` : `🂠 ${foeName} is setting…`}</span>` +
+    kinds.map((k) => `<div class="setcard back${posClass(k)}${skin}"><span class="sc-art">🂠</span></div>`).join("");
 }
 // tell the opponent our live card count whenever we play or cancel one (backs only — never which cards)
-function sendFieldCount(){ if (!tutorialMode && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "field", n: plan.length })); }
+function sendFieldCount(){ if (!tutorialMode && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "field", kinds: plan.map(d => d.k) })); }
 function unstage(idx){
   if (locked) return;
   const d = plan[idx];
@@ -1074,92 +1113,101 @@ function renderTimer(){
 // ---- the reveal: both plans flip up, then attacks resolve blow by blow ----
 const sideName = (slot) => slot === myslot ? "You" : foeName;
 function dmgFloat(slot, dmg){
-  const s = document.getElementById("rvside" + slot); if (!s) return;
+  const z = document.getElementById(slot === myslot ? "fieldme" : "fieldfoe"); if (!z) return;
   const f = document.createElement("div"); f.className = "dmgfloat"; f.textContent = "−" + dmg;
-  s.appendChild(f); setTimeout(() => f.remove(), 820);
+  z.appendChild(f); setTimeout(() => f.remove(), 820);
 }
+function revHp(slot, val){ // update a badge's HP number + bar during the reveal
+  const you = slot === myslot;
+  const num = document.getElementById(you ? "myhp" : "foehp"); if (num) num.textContent = val;
+  const bar = document.getElementById(you ? "mybar" : "foebar"); if (bar) bar.style.width = (val / 30 * 100) + "%";
+}
+const CLASH = (html) => { $("clash").innerHTML = `<span id="clashmsg">${html}</span>`; };
+// the reveal now plays out ON the board: the set cards flip up in place, then each effect resolves with HP hits + shakes
 async function startReveal(m){
   const events = m.events || [];
   const finish = () => {
     animating = false;
+    hideShowcase();
     applyPlayers(m.players); (m.logs || []).forEach(addLog);
+    CLASH("⚔️ THE FIELD");
     if (tutorialMode){ guideStep++; renderGuide(); return; } // reveal done -> next coach step (the lesson)
     if (pendingOver){ const o = pendingOver; pendingOver = null; showOver(o); }
     else if (pendingRound){ const r = pendingRound; pendingRound = null; newRound(r); }
   };
   if (!events.length){ finish(); return; } // both sides did nothing — no drama to show
   animating = true;
-
-  const R = $("reveal");
   const foeSlot = 1 - myslot, meSlot = myslot;
-  const hand = { 0: [], 1: [] };
-  events.forEach((e) => {
-    if (e.t === "defense") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "shield" });
-    else if (e.t === "attack") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "attack" });
-    else if (e.t === "trap") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "trap" });
-  });
   const hp = [shownHp[0], shownHp[1]];
-  const sideHTML = (slot, cls, label) =>
-    `<div class="rv-side" id="rvside${slot}"><div class="rv-name ${cls}">${label}</div>` +
-    `<div class="rv-hp" id="rvhp${slot}">${hp[slot]}</div><div class="rv-cards" id="rvcards${slot}"></div></div>`;
-  R.innerHTML = sideHTML(foeSlot, "foe", esc(foeName)) + `<div class="rv-mid" id="rvmid">Reveal!</div>` + sideHTML(meSlot, "me", "You");
+  const zoneEl = (slot) => document.getElementById(slot === meSlot ? "fieldme" : "fieldfoe");
+  // gather each side's actual cards from the authoritative events
+  const sideCards = { [foeSlot]: [], [meSlot]: [] };
+  events.forEach((e) => {
+    if (e.t === "defense") sideCards[e.who].push({ id: e.card, k: "shield" });
+    else if (e.t === "attack") sideCards[e.who].push({ id: e.card, k: "attack" });
+    else if (e.t === "trap") sideCards[e.who].push({ id: e.card, k: "trap" });
+  });
+  // lay both zones out as face-down (edge-on) cards, oriented, then flip them up in place
   for (const slot of [foeSlot, meSlot]){
-    const c = document.getElementById("rvcards" + slot);
-    if (!hand[slot].length){ c.innerHTML = `<span style="color:var(--soft);font-size:12px">— held back —</span>`; continue; }
-    hand[slot].forEach((card) => {
-      const d = document.createElement("div"); d.className = "rv-card " + card.k;
-      d.innerHTML = `<span class="em">${card.em}</span><span class="nm">${card.nm}</span>`;
-      c.appendChild(d);
-    });
+    const z = zoneEl(slot), cards = sideCards[slot];
+    z.innerHTML = cards.length
+      ? cards.map((c) => `<div class="setcard back flip${posClass(c.k)}"></div>`).join("")
+      : `<span class="fieldempty">— held back —</span>`;
   }
-  R.classList.add("show");
+  CLASH("Reveal!");
+  await sleep(160);
+  const flips = [];
+  for (const slot of [foeSlot, meSlot]){
+    const z = zoneEl(slot), cards = sideCards[slot];
+    [...z.querySelectorAll(".setcard")].forEach((el, i) => flips.push(new Promise((res) => setTimeout(() => {
+      const c = cards[i];
+      el.className = "setcard " + c.k + posClass(c.k);
+      el.innerHTML = `<span class="sc-art">${glyph(c.id)}</span><span class="sc-nm">${CARDS[c.id].name}</span>`;
+      res();
+    }, i * 150 + (slot === foeSlot ? 0 : 80)))));
+  }
+  await Promise.all(flips);
+  await sleep(340);
 
-  // flip every staged card face-up, staggered
-  const cards = [...R.querySelectorAll(".rv-card")];
-  cards.forEach((c, i) => setTimeout(() => c.classList.add("up"), i * 130));
-  await sleep(cards.length * 130 + 500);
-
-  // resolve, event by event
+  const shakeBoard = () => { const B = $("field"); B.classList.add("hitshake"); setTimeout(() => B.classList.remove("hitshake"), 320); };
   for (const e of events){
-    const mid = $("rvmid");
     if (e.t === "defense"){
       const c = CARDS[e.card], bits = [];
       if (e.block) bits.push(`🛡️ ${c.name}`);
-      if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; }
+      if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
       if (e.restore) bits.push(`✨ ${glyph(e.restore)} back`);
       if (e.restoreAll) bits.push(`✨ cleanse all`);
-      mid.innerHTML = `${glyph(e.card)} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`;
+      CLASH(`${glyph(e.card)} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`);
       await sleep(650);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
-      if (e.blocked){ mid.innerHTML = `${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
+      showcaseCard(e.card, e.who); // the attack card leaps to centre-screen, in the owner's skin
+      await sleep(480);            // let it land before the damage lands
+      if (e.blocked){ CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`); }
       else {
-        hp[tgt] = Math.max(0, hp[tgt] - e.dmg);
+        hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
         const dis = e.disable ? ` <span class="blk">⛔ ${glyph(e.disable)}</span>` : "";
-        mid.innerHTML = `${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`;
-        const hpEl = document.getElementById("rvhp" + tgt); if (hpEl) hpEl.textContent = hp[tgt];
-        dmgFloat(tgt, e.dmg);
-        R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
+        CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`);
+        dmgFloat(tgt, e.dmg); shakeBoard();
       }
-      await sleep(800);
+      await sleep(950);
     }
     else if (e.t === "trap"){
       const c = CARDS[e.card];
-      if (!e.triggered){ mid.innerHTML = `${glyph(e.card)} ${c.name} — 🪤 trap set, not sprung`; await sleep(600); }
+      if (!e.triggered){ CLASH(`${glyph(e.card)} ${c.name} — 🪤 set, not sprung`); await sleep(600); }
       else {
         const bits = [], tgt = 1 - e.who;
-        if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); const el = document.getElementById("rvhp"+tgt); if (el) el.textContent = hp[tgt]; dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
-        if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; bits.push(`💚 +${e.heal}`); }
+        if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
+        if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
         if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
-        mid.innerHTML = `${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`;
-        R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
+        CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
+        shakeBoard();
         await sleep(850);
       }
     }
   }
-  await sleep(550);
-  R.classList.remove("show");
+  await sleep(500);
   finish();
 }
 
@@ -1217,6 +1265,24 @@ function positionPreview(cx, topY){
   previewEl.style.left = left + "px"; previewEl.style.top = top + "px";
 }
 function hidePreview(){ if (previewEl) previewEl.style.display = "none"; }
+// reveal drama: throw the big card into the middle of the screen for a beat, painted with the OWNER's skin
+let showcaseEl = null, showcaseTimer = null;
+function showcaseCard(id, ownerSlot){
+  if (!CARDS[id]) return;
+  if (!showcaseEl){ showcaseEl = document.createElement("div"); showcaseEl.id = "showcase"; document.body.appendChild(showcaseEl); }
+  const you = ownerSlot === myslot;
+  const skinId = you ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default");
+  const bg = (SKINS[skinId] || SKINS.default).bg;
+  showcaseEl.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${you ? "YOUR ATTACK" : esc(foeName).toUpperCase() + "'S ATTACK"}</div>${bigCardHTML(id)}`;
+  const card = showcaseEl.querySelector(".bigcard");
+  if (card) card.style.setProperty("--cardbg", bg); // the art panel takes the owner's skin colour
+  clearTimeout(showcaseTimer);
+  showcaseEl.style.display = "block";
+  showcaseEl.classList.remove("in");
+  requestAnimationFrame(() => requestAnimationFrame(() => showcaseEl.classList.add("in")));
+  showcaseTimer = setTimeout(() => hideShowcase(), 1500);
+}
+function hideShowcase(){ if (!showcaseEl) return; showcaseEl.classList.remove("in"); clearTimeout(showcaseTimer); showcaseTimer = setTimeout(() => { if (showcaseEl) showcaseEl.style.display = "none"; }, 220); }
 if (HOVER){
   document.addEventListener("mouseover", (e) => {
     if (drag) return;
@@ -1634,7 +1700,7 @@ function highlightTargets(){
     const [kind, arg] = tok.split(":");
     if (kind === "base") hi(`#bases [data-el="${arg}"]`);
     else if (kind === "card") hi(`#hand [data-id="${arg}"]`);
-    else if (kind === "panel") hi(arg === "me" ? ".fighter.me" : ".fighter.foe");
+    else if (kind === "panel") hi(arg === "me" ? ".hpbadge.me" : ".hpbadge.foe");
   });
 }
 function startTutorial(){
