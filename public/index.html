@@ -922,7 +922,7 @@ function doReady(){
   if (tutorialMode){ const g = GUIDE[guideStep]; if (g && g.ready) tutPlayReveal(g.ready); return; }
   if (locked || !ws || ws.readyState!==1) return;
   locked = true;
-  ws.send(JSON.stringify({ type:"plan", deploys: plan.map(d=>({ k:d.k, card:d.card })) }));
+  ws.send(JSON.stringify({ type:"plan", deploys: plan.map(d=>({ k:d.k, card:d.card })), left: apLeft() })); // report true unspent mana for banking
   renderTimer();
   updateUI();
 }

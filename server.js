@@ -335,7 +335,9 @@ function resolveRound(room) {
     const dep = (p.plan && p.plan.deploys) || [];
     const spent = dep.reduce((s, d) => s + (COST[d.card] || 1), 0);
     p.manaSpent = (p.manaSpent || 0) + spent;
-    p.leftover = Math.max(0, (p.mana || 0) - spent); // unspent mana banks toward next round
+    // banking uses the client's reported unspent mana (which also counts crafting); bot falls back to plays-only
+    const left = p.reportedLeft != null ? p.reportedLeft : ((p.mana || 0) - spent);
+    p.leftover = Math.max(0, Math.min(p.mana || 0, left)); // unspent mana banks toward next round
   }
   // 1) defenses go first, so a shield played this round blocks an attack played this round; heals + restores apply now too
   for (const p of [A, B]) for (const d of of(p, "shield")) {
@@ -435,7 +437,7 @@ function beginRound(room, type) {
     const carried = Math.min(p.leftover || 0, cap); // bank up to the cap; any excess is lost
     p.mana = base + carried;
     p.carriedIn = carried;
-    p.leftover = 0; // recomputed at resolve from whatever is left unspent
+    p.leftover = 0; p.reportedLeft = null; // recomputed at resolve from whatever is left unspent
   }
   // each player gets their OWN mana budget (it depends on what they personally banked)
   for (const p of room.players) send(p.ws, { type, players: stateOf(room), round, ap: p.mana, base, carried: p.carriedIn, nextCap, seconds: ROUND_SECONDS });
@@ -509,6 +511,7 @@ wss.on("connection", (ws) => {
     if (m.type === "plan") {
       if (me.ready) return;                        // already locked in this round
       me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
+      me.reportedLeft = Math.max(0, m.left | 0);   // client's true unspent mana (counts crafts, not just plays)
       me.ready = true;
       // tell the opponent HOW MANY cards were committed (face-down backs) — never which cards
       send(opp.ws, { type: "oppReady", count: me.plan.deploys.length });
