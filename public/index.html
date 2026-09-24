@@ -89,6 +89,8 @@
   .base{width:60px;height:60px;border-radius:12px;font-size:26px;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:2px;line-height:1}
   .base small{font-size:10px;color:var(--soft);font-weight:600}
+  /* pixel-art element image, sized to sit like an emoji glyph */
+  .elglyph{width:1.05em;height:1.05em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
   .slot{width:56px;height:56px;border:1.5px dashed var(--line);border-radius:12px;display:flex;
@@ -429,6 +431,9 @@ const CARDS = {
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
 const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
+// some elements are drawn as a pixel-art image instead of an emoji; glyph() returns HTML (img or emoji text)
+const IMG_EL = { fire: "img/fire.png" };
+const glyph = (id) => IMG_EL[id] ? `<img class="elglyph" src="${IMG_EL[id]}" alt="${id}">` : EMO(id);
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
@@ -724,7 +729,7 @@ function applyPlayers(players){
   $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
   $("foeshields").textContent = "Shields: " + foe.shields.length;
   myDisabled = new Set(me.disabled || []);
-  $("lockwarn").textContent = myDisabled.size ? `⛔ ${[...myDisabled].map(EMO).join(" ")} disabled this round` : "";
+  $("lockwarn").innerHTML = myDisabled.size ? `⛔ ${[...myDisabled].map(glyph).join(" ")} disabled this round` : "";
   shownHp = [players[0].hp, players[1].hp];
   foeName = foe.name; foeBack = foe.back || "default";
 }
@@ -749,7 +754,7 @@ function renderBases(){
     b.className = "base" + (isLocked(el) ? " locked":"");
     b.disabled = !canAct() || isLocked(el);
     b.dataset.el = el;
-    b.innerHTML = `<span>${em}</span><small>${el}</small>`;
+    b.innerHTML = `<span>${glyph(el)}</span><small>${el}</small>`;
     b.onclick = () => addToSlot(el);
     $("bases").appendChild(b);
   }
@@ -764,8 +769,8 @@ function addToSlot(el){
   if (slots[0] && slots[1]) craft();
 }
 function renderSlots(){
-  $("s0").textContent = slots[0]?EMO(slots[0]):""; $("s0").className="slot"+(slots[0]?" full":"");
-  $("s1").textContent = slots[1]?EMO(slots[1]):""; $("s1").className="slot"+(slots[1]?" full":"");
+  $("s0").innerHTML = slots[0]?glyph(slots[0]):""; $("s0").className="slot"+(slots[0]?" full":"");
+  $("s1").innerHTML = slots[1]?glyph(slots[1]):""; $("s1").className="slot"+(slots[1]?" full":"");
 }
 $("s0").onclick = () => { slots=[slots[1],null]; renderSlots(); };
 $("s1").onclick = () => { slots[1]=null; renderSlots(); };
@@ -1003,7 +1008,7 @@ async function startReveal(m){
       const c = CARDS[e.card], bits = [];
       if (e.block) bits.push(`🛡️ ${c.name}`);
       if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; }
-      if (e.restore) bits.push(`✨ ${EMO(e.restore)} back`);
+      if (e.restore) bits.push(`✨ ${glyph(e.restore)} back`);
       if (e.restoreAll) bits.push(`✨ cleanse all`);
       mid.innerHTML = `${c.em} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`;
       await sleep(650);
@@ -1013,7 +1018,7 @@ async function startReveal(m){
       if (e.blocked){ mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg);
-        const dis = e.disable ? ` <span class="blk">⛔ ${EMO(e.disable)}</span>` : "";
+        const dis = e.disable ? ` <span class="blk">⛔ ${glyph(e.disable)}</span>` : "";
         mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`;
         const hpEl = document.getElementById("rvhp" + tgt); if (hpEl) hpEl.textContent = hp[tgt];
         dmgFloat(tgt, e.dmg);
@@ -1028,7 +1033,7 @@ async function startReveal(m){
         const bits = [], tgt = 1 - e.who;
         if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); const el = document.getElementById("rvhp"+tgt); if (el) el.textContent = hp[tgt]; dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
         if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; bits.push(`💚 +${e.heal}`); }
-        if (e.disable){ bits.push(`<span class="blk">⛔ ${EMO(e.disable)}</span>`); }
+        if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
         mid.innerHTML = `${c.em} ${c.name} <b>springs!</b> ${bits.join(" · ")}`;
         R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
         await sleep(850);
@@ -1042,7 +1047,7 @@ async function startReveal(m){
 
 // ---- Guide (discovered recipes only) & Recipe Book (all) ----
 const CAP = (s) => s[0].toUpperCase() + s.slice(1);
-const ingredients = (c) => c.recipe.map((r) => `${EMO(r)} ${BASE[r] ? CAP(r) : CARDS[r].name}`).join(" + ");
+const ingredients = (c) => c.recipe.map((r) => `${glyph(r)} ${BASE[r] ? CAP(r) : CARDS[r].name}`).join(" + ");
 function renderSheet(mode){
   const known = mode === "known";
   const total = Object.keys(CARDS).length;
@@ -1052,7 +1057,7 @@ function renderSheet(mode){
   const counterRows = attacks.filter(([id]) => !known || discovered.has(id)).map(([id, c]) => {
     const s = CARDS[c.counter];
     const blk = (!known || discovered.has(c.counter)) ? `${s.em} ${s.name}` : "🔒 ???";
-    const dis = c.disable ? ` · ⛔${EMO(c.disable)}` : "";
+    const dis = c.disable ? ` · ⛔${glyph(c.disable)}` : "";
     return `<div class="crow click" data-card="${id}"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
   }).join("");
 
@@ -1076,7 +1081,7 @@ function openSheet(mode){ sheetMode = mode; renderSheet(mode); $("sheet").hidden
 
 // ---- Clash-Royale-style card inspector: big card, effects, and a build tree down to base elements ----
 function buildNode(id){
-  if (BASE[id]) return `<li><div class="tnode base"><span class="tem">${BASE[id]}</span><span class="tnm">${CAP(id)}</span></div></li>`;
+  if (BASE[id]) return `<li><div class="tnode base"><span class="tem">${glyph(id)}</span><span class="tnm">${CAP(id)}</span></div></li>`;
   const c = CARDS[id];
   const kids = (c.recipe || []).map(buildNode).join("");
   return `<li><div class="tnode ${c.kind}" data-card="${id}"><span class="tem">${c.em}</span><span class="tnm">${c.name}</span></div>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
@@ -1086,19 +1091,19 @@ function cardEffects(id){
   const E = (k, txt) => rows.push(`<div class="ieff"><span class="k">${k}</span> <span>${txt}</span></div>`);
   if (c.kind === "attack"){
     E("💥", `Deals <b>${c.dmg}</b> damage`);
-    if (c.disable) E("⛔", `Disables the enemy's ${EMO(c.disable)} <b>${CAP(c.disable)}</b> for their next round`);
+    if (c.disable) E("⛔", `Disables the enemy's ${glyph(c.disable)} <b>${CAP(c.disable)}</b> for their next round`);
     const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${cc.em} ${cc.name}</b>`);
   } else if (c.kind === "shield"){
     if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${a.em} ${a.name}</b> — negates its damage and disable`); }
     if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
-    if (c.restore) E("✨", `Restores your ${EMO(c.restore)} <b>${CAP(c.restore)}</b> if it's disabled`);
+    if (c.restore) E("✨", `Restores your ${glyph(c.restore)} <b>${CAP(c.restore)}</b> if it's disabled`);
     if (c.restoreAll) E("✨", `Cleanses <b>all</b> your disabled elements`);
   } else if (c.kind === "trap"){
     const tr = c.trap || {};
     E("🪤", `Trap — springs only if your opponent attacks you this round`);
     if (tr.retaliate) E("💥", `Deals <b>${tr.retaliate}</b> damage back to the attacker`);
     if (tr.heal) E("💚", `Heals you <b>${tr.heal}</b> HP`);
-    if (tr.disable) E("⛔", `Disables ${tr.disable === "random" ? "a random" : EMO(tr.disable)} enemy element next round`);
+    if (tr.disable) E("⛔", `Disables ${tr.disable === "random" ? "a random" : glyph(tr.disable)} enemy element next round`);
     const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${cc.em} ${cc.name}`);
     if (usedIn.length) E("➡️", `Also crafts into: <b>${usedIn.join(", ")}</b>`);
   }
