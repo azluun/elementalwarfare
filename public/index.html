@@ -290,8 +290,9 @@
         <code id="invitelink"></code>
       </div>
       <div class="row">
-        <button id="cosmetics" style="flex:1;padding:8px;font-size:13px">🎖️ Titles</button>
-        <button id="shop" style="flex:1;padding:8px;font-size:13px">🎨 Card Skins</button>
+        <button id="cosmetics" style="flex:1;padding:8px;font-size:12px">🎖️ Titles</button>
+        <button id="shop" style="flex:1;padding:8px;font-size:12px">🎨 Skins</button>
+        <button id="icons" style="flex:1;padding:8px;font-size:12px">🖼️ Icons</button>
       </div>
       <button id="admin" hidden style="padding:8px;font-size:13px;border-color:#b98cff;color:#b98cff">🛠 Dev: Profiles</button>
     </div>
@@ -530,6 +531,19 @@ const SKINS = {
   rose:   { name:"Rose",   price:15, bg:"#2e1622" },
   gold:   { name:"Gold",   price:20, bg:"#2b2410" },
 };
+// cosmetic profile icons (avatars). Emoji so there are no assets to host. Prices mirror the server.
+const ICONS = {
+  default: { name:"Rookie",   price:0,  em:"🙂" },
+  flame:   { name:"Flame",    price:5,  em:"🔥" },
+  droplet: { name:"Droplet",  price:5,  em:"💧" },
+  terra:   { name:"Terra",    price:8,  em:"🌍" },
+  gale:    { name:"Gale",     price:8,  em:"🌪️" },
+  comet:   { name:"Comet",    price:12, em:"☄️" },
+  dragon:  { name:"Dragon",   price:15, em:"🐉" },
+  monarch: { name:"Monarch",  price:20, em:"👑" },
+  archmage:{ name:"Archmage", price:25, em:"🧙" },
+};
+const iconEm = (id) => (ICONS[id] || ICONS.default).em;
 function applySkin(){ // recolour your own cards to the equipped skin (no gameplay effect)
   const s = SKINS[(profile && profile.cardSkin) || "default"] || SKINS.default;
   document.documentElement.style.setProperty("--cardbg", s.bg);
@@ -537,7 +551,7 @@ function applySkin(){ // recolour your own cards to the equipped skin (no gamepl
 function refreshProfileBox(){
   if (!profile) return;
   const r = profile.rating || 1000, t = tierOf(r);
-  $("pname").textContent = profile.name; $("pname").style.color = t.color;
+  $("pname").textContent = `${iconEm(profile.icon)} ${profile.name}`; $("pname").style.color = t.color;
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
   $("precord").innerHTML = `${t.em} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
   $("pcoins").textContent = `🪙 ${profile.coins || 0}`;
@@ -633,11 +647,11 @@ function newRound(m){
   startTimer(m.seconds);
 }
 function fighterLabel(p, you){
-  const nm = esc(p.name);
-  if (p.rating == null) return nm + (you ? " (you)" : "");
+  const ic = `${iconEm(p.icon || "default")} `, nm = esc(p.name);
+  if (p.rating == null) return ic + nm + (you ? " (you)" : "");
   const t = tierOf(p.rating);
   const title = p.title && TITLES[p.title] ? ` <span style="color:${titleColor(p.title, t.color)}">${TITLES[p.title]}</span>` : "";
-  return `${nm}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}</span><span style="font-size:11px">${title}</span>`;
+  return `${ic}${nm}${you ? " (you)" : ""} <span style="font-size:11px;color:${t.color}">${t.em}</span><span style="font-size:11px">${title}</span>`;
 }
 function applyPlayers(players){
   const me = players[myslot], foe = players[1-myslot];
@@ -1040,7 +1054,7 @@ function openLeaderboard(){
     const rows = (d.top || []).map((p, i) => {
       const t = tierOf(p.rating), mine = p.name === me ? ' style="background:var(--panel2)"' : "";
       return `<div class="crow"${mine}><span style="width:26px;color:var(--soft)">#${i+1}</span>` +
-        `<span class="a" style="color:var(--ink)">${esc(p.name)}</span>` +
+        `<span class="a" style="color:var(--ink)">${iconEm(p.icon)} ${esc(p.name)}</span>` +
         `<span>${t.em} ${p.rating}</span><span class="s" style="color:var(--soft)">${p.wins}W/${p.losses}L</span></div>`;
     }).join("");
     $("sheetbody").innerHTML = rows || `<p class="sheetnote">No ranked players yet — win a match to claim the top spot!</p>`;
@@ -1100,16 +1114,39 @@ function openShop(){
       `<span class="a" style="color:var(--ink);flex:1;margin-left:8px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
   }
   $("sheetbody").innerHTML = rows;
-  $("sheetbody").querySelectorAll("button[data-skin]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.skin); });
+  $("sheetbody").querySelectorAll("button[data-skin]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.skin, "skin"); });
   $("sheet").hidden = false;
 }
-function shopAction(action, skin){
-  fetch("/shop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: lastIdToken, action, skin }) })
+function openIconShop(){
+  if (!profile) return;
+  $("sheettitle").textContent = "🖼️ Profile Icons";
+  const owned = new Set(profile.icons || ["default"]);
+  const eqp = profile.icon || "default";
+  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on a profile icon — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  for (const [id, s] of Object.entries(ICONS)){
+    const isOwned = id === "default" || owned.has(id);
+    const isEq = eqp === id;
+    const av = `<span style="font-size:26px;width:34px;text-align:center;flex-shrink:0">${s.em}</span>`;
+    const ctrl = isEq ? `<button disabled>Equipped</button>`
+      : isOwned ? `<button data-icon="${id}" data-act="equip">Equip</button>`
+      : `<button data-icon="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+    rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}>${av}` +
+      `<span class="a" style="color:var(--ink);flex:1;margin-left:6px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
+  }
+  $("sheetbody").innerHTML = rows;
+  $("sheetbody").querySelectorAll("button[data-icon]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.icon, "icon"); });
+  $("sheet").hidden = false;
+}
+function shopAction(action, item, kind){
+  const body = { idToken: lastIdToken, action, kind: kind || "skin" };
+  if (kind === "icon") body.icon = item; else body.skin = item;
+  fetch("/shop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
     .then((r) => r.json()).then((d) => {
-      if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); openShop(); }
+      if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); (kind === "icon" ? openIconShop : openShop)(); }
     }).catch(() => {});
 }
 $("shop").onclick = openShop;
+$("icons").onclick = openIconShop;
 
 // ---- dev-only profile admin (view / repair / normalize); server enforces DEV_EMAILS ----
 function adminCall(action, extra){
