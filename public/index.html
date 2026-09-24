@@ -135,9 +135,11 @@
   #roundmsg{flex:1} .turnbar.mine #roundmsg{color:var(--you)} .turnbar.theirs #roundmsg{color:var(--soft)}
   #timer{font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--soft)}
   .apdots{display:flex;gap:4px;flex-wrap:wrap;max-width:120px;justify-content:center}
-  .apdots span{width:12px;height:12px;border-radius:50%;background:var(--line)}
-  .apdots span.on{background:var(--amber)}
-  .apdots span.bank{box-shadow:0 0 0 1px var(--shield) inset} .apdots span.bank.on{background:var(--shield)}
+  .apdots span{width:16px;height:16px;border-radius:50%;background-color:var(--line);
+    background-image:url(img/mana.png);background-size:cover;background-position:center;background-repeat:no-repeat;
+    image-rendering:pixelated;opacity:.32;transition:opacity .15s} /* mana orb pip; dim = spent */
+  .apdots span.on{opacity:1}
+  .apdots span.bank{box-shadow:0 0 0 2px var(--shield)} /* the one bankable mana */
   #ready{background:var(--accent);color:#0e120a;border-color:transparent}
   #ready:disabled{opacity:.4;background:var(--panel2);color:var(--ink)}
   .craft.off{opacity:.45;pointer-events:none}
@@ -321,7 +323,7 @@
     .hint{font-size:11px;margin-top:5px}
     .turnbar{padding:7px 10px;gap:8px}
     .apdots{gap:3px}
-    .apdots span{width:10px;height:10px}
+    .apdots span{width:14px;height:14px}
     #ready{padding:7px 12px}
     .hand{grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px}
     .card{padding:6px 5px;border-radius:11px;gap:3px}
@@ -853,7 +855,7 @@ function newRound(m){
   applyPlayers(m.players);
   slots = [null,null]; renderSlots();
   $("hint").innerHTML = manaNextCap > 0
-    ? `Tap 2 to craft · drag up to play · hold to inspect. <b style="color:var(--shield)">Leftover mana banks next round (max ${manaNextCap} 🔷).</b>`
+    ? `Tap 2 to craft · drag up to play · hold to inspect. <b style="color:var(--shield)">Leftover mana banks next round (max ${manaNextCap} ${manaIcon()}).</b>`
     : `Tap 2 to craft · drag a card up to play · hold a card to inspect.`;
   updateUI();
   startTimer(m.seconds);
@@ -884,7 +886,7 @@ function applyPlayers(players){
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
   $("roundmsg").innerHTML = locked ? "Waiting for opponent…"
-    : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">🔷${manaCarried} banked</span>` : ""}${manaBonus > 0 ? ` · <span style="color:var(--amber)">${manaIcon()}${manaBonus} charged</span>` : ""}`;
+    : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">${manaIcon()}${manaCarried} banked</span>` : ""}${manaBonus > 0 ? ` · <span style="color:var(--amber)">${manaIcon()}${manaBonus} charged</span>` : ""}`;
   $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}${i>=manaBase?" bank":""}"></span>`).join("");
   $("ready").textContent = locked ? "↩ Un-ready" : "Ready";
   $("ready").disabled = tutorialMode && locked; // in a live match you can always retract; tutorial locks are scripted
