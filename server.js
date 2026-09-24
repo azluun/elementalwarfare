@@ -29,7 +29,7 @@ async function handleAuth(req, res) {
       const { idToken, discovered, name, tutorialDone } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const p = ticket.getPayload();
-      const profile = (await store.getProfileAsync(p.sub)) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [], coins: 0, skins: ["default"], cardSkin: "default", icons: ["default"], icon: "default" };
+      const profile = (await store.getProfileAsync(p.sub)) || { id: p.sub, name: "", wins: 0, losses: 0, rating: 1000, peak: 1000, title: "", tutorialDone: false, discovered: [], coins: 0, skins: ["default"], cardSkin: "default", icons: ["default"], icon: "default", nameColors: ["default"], nameColor: "default", cardBacks: ["default"], cardBack: "default" };
       let nameTaken = false;
       if (typeof name === "string" && name.trim()) {          // a name was submitted (first login / name prompt)
         const wanted = name.trim().slice(0, 16);
@@ -46,6 +46,10 @@ async function handleAuth(req, res) {
       if (profile.cardSkin == null) profile.cardSkin = "default";
       if (!Array.isArray(profile.icons)) profile.icons = ["default"];
       if (profile.icon == null) profile.icon = "default";
+      if (!Array.isArray(profile.nameColors)) profile.nameColors = ["default"];
+      if (profile.nameColor == null) profile.nameColor = "default";
+      if (!Array.isArray(profile.cardBacks)) profile.cardBacks = ["default"];
+      if (profile.cardBack == null) profile.cardBack = "default";
       profile.dev = DEV_EMAILS.has((p.email || "").toLowerCase()); // refresh dev flag each login
       const merged = new Set([...(profile.discovered || []), ...(Array.isArray(discovered) ? discovered : [])]);
       profile.discovered = [...merged];
@@ -94,29 +98,34 @@ async function handleShop(req, res) {
   req.on("end", async () => {
     try {
       if (!googleClient) throw new Error("sign-in not configured");
-      const { idToken, action, skin, icon, kind } = JSON.parse(body || "{}");
+      const { idToken, action, kind, item, skin, icon, name } = JSON.parse(body || "{}");
       const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
       const prof = await store.getProfileAsync(ticket.getPayload().sub);
       if (!prof) throw new Error("no profile");
       if (prof.coins == null) prof.coins = 0;
-      if (!Array.isArray(prof.skins)) prof.skins = ["default"];
-      if (prof.cardSkin == null) prof.cardSkin = "default";
-      if (!Array.isArray(prof.icons)) prof.icons = ["default"];
-      if (prof.icon == null) prof.icon = "default";
-      const isIcon = kind === "icon"; // default is card skins (back-compat with the old payload)
-      const catalog = isIcon ? ICONS : SKINS, ownedKey = isIcon ? "icons" : "skins", equipKey = isIcon ? "icon" : "cardSkin";
-      const item = isIcon ? icon : skin;
-      if (action === "buy") {
-        const price = catalog[item];
-        if (price == null) throw new Error("unknown item");
-        if (prof[ownedKey].includes(item)) throw new Error("already owned");
-        if (prof.coins < price) throw new Error("not enough coins");
-        prof.coins -= price; prof[ownedKey].push(item);
-      } else if (action === "equip") {
-        if (item !== "default" && !prof[ownedKey].includes(item)) throw new Error("not owned");
-        if (catalog[item] == null) throw new Error("unknown item");
-        prof[equipKey] = item;
-      } else throw new Error("bad action");
+      // backfill any missing cosmetic fields
+      for (const c of Object.values(COSMETICS)) { if (!Array.isArray(prof[c.owned])) prof[c.owned] = ["default"]; if (prof[c.equip] == null) prof[c.equip] = "default"; }
+      if (action === "rename") { // pay coins to change your (unique) name
+        const wanted = String(name || "").trim().slice(0, 16);
+        if (!wanted) throw new Error("empty name");
+        if (prof.coins < RENAME_COST) throw new Error("not enough coins");
+        if (store.nameTaken(wanted, prof.id)) throw new Error("name taken");
+        prof.coins -= RENAME_COST; prof.name = wanted;
+      } else {
+        const c = COSMETICS[kind] || COSMETICS.skin; // default kind = card skin (back-compat)
+        const it = item != null ? item : (kind === "icon" ? icon : skin); // prefer generic `item`, fall back to legacy fields
+        if (action === "buy") {
+          const price = c.catalog[it];
+          if (price == null) throw new Error("unknown item");
+          if (prof[c.owned].includes(it)) throw new Error("already owned");
+          if (prof.coins < price) throw new Error("not enough coins");
+          prof.coins -= price; prof[c.owned].push(it);
+        } else if (action === "equip") {
+          if (it !== "default" && !prof[c.owned].includes(it)) throw new Error("not owned");
+          if (c.catalog[it] == null) throw new Error("unknown item");
+          prof[c.equip] = it;
+        } else throw new Error("bad action");
+      }
       store.saveProfile(prof.id, prof);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ profile: prof }));
@@ -171,7 +180,7 @@ const server = http.createServer((req, res) => {
   if (url === "/leaderboard") {
     const top = store.allProfiles().filter((p) => p.name)
       .sort((a, b) => (b.rating || 1000) - (a.rating || 1000)).slice(0, 20)
-      .map((p) => ({ name: p.name, rating: p.rating || 1000, wins: p.wins || 0, losses: p.losses || 0, icon: p.icon || "default" }));
+      .map((p) => ({ name: p.name, rating: p.rating || 1000, wins: p.wins || 0, losses: p.losses || 0, icon: p.icon || "default", nameColor: p.nameColor || "default" }));
     res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ top }));
   }
   if (url === "/auth" && req.method === "POST") return handleAuth(req, res);
@@ -220,6 +229,16 @@ const COST = { storm:2, firebolt:3, meteor:3, plague:4, ward:2, mountain:2, plan
 const SKINS = { default:0, ember:5, ocean:5, forest:8, royal:12, rose:15, gold:20 };
 // cosmetic profile icons (avatars), also coin-unlocked; purely visual
 const ICONS = { default:0, flame:5, droplet:5, terra:8, gale:8, comet:12, dragon:15, monarch:20, archmage:25 };
+const NAME_COLORS = { default:0, crimson:8, azure:8, mint:8, gold:10, violet:12, rose:12, sunset:15, rainbow:25 }; // recolour your name
+const CARD_BACKS = { default:0, pulse:8, shimmer:12, ember:15, aurora:20 };                                       // animated face-down card backs opponents see
+const RENAME_COST = 20;
+// every coin-priced cosmetic catalog, keyed by shop `kind`
+const COSMETICS = {
+  skin:  { catalog: SKINS,        owned: "skins",      equip: "cardSkin"  },
+  icon:  { catalog: ICONS,        owned: "icons",      equip: "icon"      },
+  color: { catalog: NAME_COLORS,  owned: "nameColors", equip: "nameColor" },
+  back:  { catalog: CARD_BACKS,   owned: "cardBacks",  equip: "cardBack"  },
+};
 // cosmetic progression: each tier (by rating) unlocks a title. Purely visual — no gameplay effect.
 const TIER_IDS = ["wood", "bronze", "silver", "gold", "platinum", "diamond", "champion"];
 const TIER_MIN = [0, 900, 1050, 1200, 1350, 1500, 1700];
@@ -244,6 +263,8 @@ function stateOf(room) {
       disabled,                        // base elements currently disabled on this player
       title: p.title || "",
       icon: p.icon || "default",
+      nameColor: p.nameColor || "default",
+      back: p.cardBack || "default",
       rating: p.rating != null ? p.rating : null,
     };
   });
@@ -254,7 +275,8 @@ function pushState(room, log) {
 function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
   const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
-    playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", icon: prof ? (prof.icon || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
+    playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", icon: prof ? (prof.icon || "default") : "default",
+    nameColor: prof ? (prof.nameColor || "default") : "default", cardBack: prof ? (prof.cardBack || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
   ws.room = room; ws.me = p;
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
