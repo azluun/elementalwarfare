@@ -431,9 +431,11 @@ const CARDS = {
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
 const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
-// elements and cards that have custom pixel-art (else fall back to the emoji). glyph() returns HTML.
-const IMG = { fire:"img/fire.png", air:"img/air.png", earth:"img/earth.png", meteor:"img/meteor.png", plague:"img/plague.png", lava:"img/lava.png" };
-const glyph = (id) => IMG[id] ? `<img class="elglyph" src="${IMG[id]}" alt="${id}">` : EMO(id);
+// Each element/card tries a pixel-art image at img/<id>.png; if the file isn't there it falls back to
+// its emoji. So art is managed purely by dropping/renaming PNGs in public/img/ — no code change needed.
+const glyph = (id) => `<img class="elglyph" src="img/${id}.png" alt="${id}" data-e="${EMO(id)}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
+// turn any base-element emoji inside a text string (e.g. card "info") into its pixel-art glyph
+const infoHtml = (s) => String(s).replace(/🔥|💧|🌍|💨/gu, (m) => glyph(Object.keys(BASE).find((k) => BASE[k] === m)));
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
@@ -808,7 +810,7 @@ function renderInv(){
     el.className = "card " + c.kind;
     el.dataset.id = id;
     el.title = "Click to add to the combiner";
-    el.innerHTML = `<span class="em">${glyph(id)}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
+    el.innerHTML = `<span class="em">${glyph(id)}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${infoHtml(c.info)}</span>`;
     const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
     if (playable){
       el.classList.add("playable");
@@ -1068,7 +1070,7 @@ function renderSheet(mode){
     ? (discovered.size === 0
         ? `<p class="sheetnote">You haven't crafted anything yet — combine elements in a match and recipes appear here.</p>`
         : `<p class="sheetnote">🔒 ${total - discovered.size} of ${total} recipes still undiscovered — craft them to reveal them.</p>`)
-    : `<p class="sheetnote">Bases 🔥💧🌍💨 are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
+    : `<p class="sheetnote">Bases ${["fire","water","earth","air"].map(glyph).join("")} are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
 
   $("sheetbody").innerHTML =
     `<p class="sheetnote" style="margin-top:0">Tap any card to inspect its build tree and effects.</p>` +
