@@ -205,6 +205,12 @@
   #showcase.in{opacity:1;transform:translate(-50%,-50%) scale(1.25) rotate(0)}
   #showcase .bigcard{box-shadow:0 20px 60px rgba(0,0,0,.72)}
   #showcase .sc-owner{position:absolute;top:-24px;left:0;right:0;text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em}
+  /* the blocking shield flies in from the side and lands on top of the attack card */
+  #showcase .sc-block{position:absolute;left:0;top:0;width:100%;
+    transform:translate(165px,-185px) scale(.5) rotate(34deg);opacity:0;
+    transition:transform .52s cubic-bezier(.2,1.25,.35,1),opacity .3s ease}
+  #showcase .sc-block.land{transform:translate(16px,20px) scale(1) rotate(-8deg);opacity:1}
+  #showcase .sc-block .bigcard{box-shadow:0 12px 34px rgba(0,0,0,.6)}
   .dragghost.big{background:none;border:none;box-shadow:none;padding:0;transform:translate(-50%,-50%) rotate(-4deg) scale(1.03)}
 
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
@@ -982,6 +988,7 @@ function renderInv(){
 function stage(id){
   const c = CARDS[id];
   if (!canAct() || !(inv[id] > 0)) return;
+  if (c.kind === "trap" && plan.some((d) => d.k === "trap")){ $("hint").textContent = "Only one trap can be set per turn."; flash(); return; }
   inv[id]--; apSpent++;
   plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield"
   updateUI();
@@ -1165,43 +1172,44 @@ async function startReveal(m){
 
   for (const e of acts){
     if (e.t === "defense"){                                        // a shield that heals / restores / cleanses
-      showcaseCard(e.card, e.who); await sleep(500);
+      showcaseCard(e.card, e.who); await sleep(750);
       const bits = [];
       if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
       if (e.restore) bits.push(`✨ ${glyph(e.restore)} back`);
       if (e.restoreAll) bits.push(`✨ cleanse all`);
       CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name} — ${bits.join(" · ")}`);
-      await sleep(850);
+      await sleep(1300);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
       showcaseCard(e.card, e.who); // the attack leaps to centre-screen in the owner's skin
-      await sleep(520);
+      await sleep(800);
       if (e.blocked){
-        const shieldId = CARDS[e.card].counter;                    // reveal the shield that mattered
+        const shieldId = CARDS[e.card].counter;                    // reveal the shield that stopped it
+        if (CARDS[shieldId]) flyShieldOver(shieldId, tgt);         // the shield flies over and lands on the attack
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ ${CARDS[shieldId] ? CARDS[shieldId].name : "blocked"}</span>`);
-        if (CARDS[shieldId]){ await sleep(280); showcaseCard(shieldId, tgt); }
+        await sleep(1500);
       }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
         const dis = e.disable ? ` <span class="blk">⛔ ${glyph(e.disable)}</span>` : "";
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`);
         dmgFloat(tgt, e.dmg); shakeBoard();
+        await sleep(1300);
       }
-      await sleep(950);
     }
     else if (e.t === "trap"){                                      // only sprung traps reach here
       const c = CARDS[e.card], bits = [], tgt = 1 - e.who;
-      showcaseCard(e.card, e.who); await sleep(520);
+      showcaseCard(e.card, e.who); await sleep(800);
       if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
       if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
       if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
       CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
       shakeBoard();
-      await sleep(900);
+      await sleep(1300);
     }
   }
-  await sleep(450);
+  await sleep(500);
   finish();
 }
 
@@ -1276,7 +1284,18 @@ function showcaseCard(id, ownerSlot){
   showcaseEl.style.display = "block";
   showcaseEl.classList.remove("in");
   requestAnimationFrame(() => requestAnimationFrame(() => showcaseEl.classList.add("in")));
-  showcaseTimer = setTimeout(() => hideShowcase(), 1500);
+  showcaseTimer = setTimeout(() => hideShowcase(), 2400); // hold the card on screen a good beat
+}
+// a shield card flies in from the defender's side and lands on top of the attack card, "covering" it
+function flyShieldOver(id, ownerSlot){
+  if (!showcaseEl || !CARDS[id]) return;
+  const you = ownerSlot === myslot;
+  const bg = (SKINS[you ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default")] || SKINS.default).bg;
+  const wrap = document.createElement("div"); wrap.className = "sc-block";
+  wrap.innerHTML = bigCardHTML(id);
+  const card = wrap.querySelector(".bigcard"); if (card) card.style.setProperty("--cardbg", bg);
+  showcaseEl.appendChild(wrap);
+  requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add("land")));
 }
 function hideShowcase(){ if (!showcaseEl) return; showcaseEl.classList.remove("in"); clearTimeout(showcaseTimer); showcaseTimer = setTimeout(() => { if (showcaseEl) showcaseEl.style.display = "none"; }, 220); }
 if (HOVER){

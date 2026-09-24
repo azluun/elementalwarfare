@@ -374,12 +374,13 @@ function resolveRound(room) {
       logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}${disable ? ` (disables ${disable})` : ""}`);
     }
   }
-  // 3) traps — a set trap stays hidden on the board until the opponent attacks you; then ALL your set traps spring.
-  //    Newly-set traps join the persistent set first (so a trap set this round can spring this round too).
-  for (const p of [A, B]) for (const d of of(p, "trap")) p.traps.push(d.card);
+  // 3) traps — a set trap stays hidden on the board until the opponent attacks you; then ONE trap springs
+  //    per incoming attack. Only one trap may be set per round; a set trap can also spring the round it's laid.
+  for (const p of [A, B]) for (const d of of(p, "trap").slice(0, 1)) p.traps.push(d.card); // cap: one new trap per turn
   for (const [me, opp] of [[A, B], [B, A]]) {
-    if (of(opp, "attack").length === 0 || !me.traps.length) continue; // not attacked → traps stay set & hidden (no event)
-    for (const card of me.traps) {
+    let springs = Math.min(of(opp, "attack").length, me.traps.length); // one trap per attack
+    while (springs-- > 0) {
+      const card = me.traps.shift();
       const tr = TRAPS[card]; if (!tr) continue;
       const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, heal: 0, disable: null };
       if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
@@ -388,7 +389,6 @@ function resolveRound(room) {
       events.push(ev);
       logs.push(`🪤 ${me.name}'s ${card} trap springs on ${opp.name}!`);
     }
-    me.traps = []; // all sprung traps are spent
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
