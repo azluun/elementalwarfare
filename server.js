@@ -223,8 +223,15 @@ const DEFENSE = {
   hearth:   { heal: 5, restore: "air" },   // no block — pure recovery
   dew:      { restoreAll: true, heal: 2 }, // cleanse every disable
 };
+// traps: the old "ingredient" cards are now playable. A trap fires only if the opponent attacks you this round.
+const TRAPS = {
+  lava:   { retaliate: 6 },              // 🌋 Volcano — erupt for 6 back
+  steam:  { heal: 6 },                   // ♨️ Steam — vent, heal 6
+  energy: { disable: "random" },         // ⚡ Energy — shock: disable a random enemy element next round
+  mud:    { retaliate: 3, heal: 3 },     // 🟤 Mud — quagmire: a little of both
+};
 // total mana (craft + play) each card costs — drives the bot's budget and the coin reward
-const COST = { storm:2, firebolt:3, meteor:3, plague:4, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2 };
+const COST = { storm:2, firebolt:3, meteor:3, plague:4, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2, lava:2, steam:2, energy:2, mud:2 };
 // cosmetic card-background skins unlocked with coins (value = price; 0 = free default). No gameplay effect.
 const SKINS = { default:0, ember:5, ocean:5, forest:8, royal:12, rose:15, gold:20 };
 // cosmetic profile icons (avatars), also coin-unlocked; purely visual
@@ -311,7 +318,7 @@ function botPlan(room, bot) {
     if (!aff.length) break;
     const card = aff[(Math.random() * aff.length) | 0];
     rem -= COST[card];
-    deploys.push(ATTACKS[card] ? { k: "attack", card } : { k: "shield", card });
+    deploys.push({ k: ATTACKS[card] ? "attack" : TRAPS[card] ? "trap" : "shield", card });
   }
   bot.plan = { deploys }; bot.ready = true; // random-affordable, not strategic
 }
@@ -353,6 +360,21 @@ function resolveRound(room) {
       if (a.disable) { opp.disabled = opp.disabled || {}; opp.disabled[a.disable] = room.round + DISABLE_ROUNDS; disable = a.disable; }
       events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg, disable });
       logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}${disable ? ` (disables ${disable})` : ""}`);
+    }
+  }
+  // 3) traps — fire only if the opponent attacked you this round (they "walked into" it)
+  for (const [me, opp] of [[A, B], [B, A]]) {
+    const sprung = of(opp, "attack").length > 0;
+    for (const d of of(me, "trap")) {
+      const tr = TRAPS[d.card]; if (!tr) continue;
+      const ev = { t: "trap", who: slot(me), card: d.card, triggered: sprung, retaliate: 0, heal: 0, disable: null };
+      if (sprung) {
+        if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
+        if (tr.heal) { const before = me.hp; me.hp = Math.min(START_HP, me.hp + tr.heal); ev.heal = me.hp - before; }
+        if (tr.disable) { const el = tr.disable === "random" ? ["fire","water","earth","air"][(Math.random() * 4) | 0] : tr.disable; opp.disabled = opp.disabled || {}; opp.disabled[el] = room.round + DISABLE_ROUNDS; ev.disable = el; }
+        logs.push(`🪤 ${me.name}'s ${d.card} trap springs on ${opp.name}!`);
+      } else logs.push(`🪤 ${me.name}'s ${d.card} trap goes unsprung`);
+      events.push(ev);
     }
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });

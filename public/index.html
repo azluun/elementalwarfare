@@ -8,7 +8,7 @@
   :root{
     --bg:#0f1310; --panel:#182019; --panel2:#20291f; --line:#2c3828;
     --ink:#e9ecdf; --soft:#9aa389; --accent:#54b483; --amber:#e0a24b;
-    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a; --cardbg:#20291f;
+    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a; --cardbg:#20291f; --trap:#e0894b;
     --dsp:"Fraunces",Georgia,serif; --body:"Spline Sans","Segoe UI",system-ui,sans-serif;
   }
   *{box-sizing:border-box}
@@ -63,7 +63,7 @@
     justify-content:center;gap:2px;border:1px solid var(--line);background:var(--cardbg);position:relative}
   .playtile .em{font-size:23px;line-height:1}
   .playtile .nm{font-size:9px;font-weight:700;text-align:center;line-height:1.05}
-  .playtile.attack{border-color:var(--foe)} .playtile.shield{border-color:var(--shield)} .playtile.curse{border-color:var(--amber)}
+  .playtile.attack{border-color:var(--foe)} .playtile.shield{border-color:var(--shield)} .playtile.trap{border-color:var(--trap)}
   .playtile .rm{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--panel);
     border:1px solid var(--line);color:var(--soft);font-size:11px;line-height:1;text-align:center;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
   .cardback{width:40px;height:56px;border-radius:9px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
@@ -129,7 +129,7 @@
   .card .em{font-size:26px;line-height:1}
   .card .cn{font-size:11.5px;font-weight:700}
   .card .cd2{font-size:10px;color:var(--soft)}
-  .card.attack{border-color:var(--foe)} .card.shield{border-color:var(--shield)} .card.curse{border-color:var(--amber)}
+  .card.attack{border-color:var(--foe)} .card.shield{border-color:var(--shield)} .card.trap{border-color:var(--trap)}
   .card button{width:100%;padding:5px;font-size:11px;margin-top:2px}
   .emptyhand{color:var(--soft);font-size:13px;text-align:center;padding:10px;grid-column:1/-1}
   .card.playable{cursor:grab;touch-action:none}
@@ -162,7 +162,7 @@
     opacity:0;transform:rotateY(90deg);transition:transform .35s,opacity .35s}
   .rv-card.up{opacity:1;transform:rotateY(0)}
   .rv-card .em{font-size:26px;line-height:1} .rv-card .nm{font-size:10px;font-weight:700;text-align:center}
-  .rv-card.attack{border-color:var(--foe)} .rv-card.shield{border-color:var(--shield)} .rv-card.curse{border-color:var(--amber)}
+  .rv-card.attack{border-color:var(--foe)} .rv-card.shield{border-color:var(--shield)} .rv-card.trap{border-color:var(--trap)}
   .rv-mid{min-height:44px;display:flex;align-items:center;justify-content:center;
     font-family:var(--dsp);font-size:20px;font-weight:600;text-align:center;padding:0 10px}
   .rv-mid .blk{color:var(--shield)} .rv-mid .hit{color:var(--foe)}
@@ -185,6 +185,11 @@
   .rrow .r{color:var(--soft)}
   .sheetnote{font-size:12px;color:var(--soft);margin-top:12px}
   .rrow.click,.crow.click{cursor:pointer;border-radius:6px} .rrow.click:hover,.crow.click:hover{background:var(--panel2)}
+  /* patch notes */
+  .patch{border-bottom:1px solid var(--line);padding:12px 0} .patch:last-child{border-bottom:0}
+  .patchhead{font-family:var(--dsp);font-size:15px;margin-bottom:7px} .patchhead .pv{color:var(--accent)}
+  .pnote{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.4;padding:3px 0}
+  .ptag{flex-shrink:0;font-size:10px;font-weight:800;color:#0e120a;border-radius:5px;padding:2px 0;text-transform:uppercase;letter-spacing:.03em;width:58px;text-align:center}
   /* ---- card inspector ---- */
   .inspect{display:flex;flex-direction:column;align-items:center;gap:10px}
   .icard{width:130px;border-radius:16px;border:2px solid var(--line);background:var(--panel2);padding:14px 12px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
@@ -212,7 +217,7 @@
   .tnode{display:flex;flex-direction:column;align-items:center;gap:1px;width:60px;padding:6px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel2)}
   .tnode[data-card]{cursor:pointer} .tnode[data-card]:hover{border-color:var(--accent)}
   .tnode .tem{font-size:23px;line-height:1} .tnode .tnm{font-size:9px;font-weight:700;text-align:center;line-height:1.05}
-  .tnode.attack{border-color:var(--foe)} .tnode.shield{border-color:var(--shield)} .tnode.item{border-color:var(--amber)} .tnode.base{border-style:dashed;opacity:.9}
+  .tnode.attack{border-color:var(--foe)} .tnode.shield{border-color:var(--shield)} .tnode.trap{border-color:var(--trap)} .tnode.base{border-style:dashed;opacity:.9}
   .over .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center;max-width:320px}
   .over h2{font-family:var(--dsp);margin:0 0 8px;font-size:28px}
   .chart{font-size:11px;color:var(--soft);text-align:center;margin-top:4px}
@@ -317,6 +322,7 @@
     <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
     <button id="howto" style="padding:8px;font-size:13px">❔ How to play</button>
+    <button id="patch" style="padding:8px;font-size:13px">📜 Patch Notes</button>
   </div>
 
   <!-- ARENA -->
@@ -401,11 +407,11 @@
 // ---- card definitions (mirror server ATTACKS for the offense numbers) ----
 const BASE = { fire:"🔥", water:"💧", earth:"🌍", air:"💨" };
 const CARDS = {
-  // -- intermediates: elements you craft, then feed into the recipes below --
-  steam:   {em:"♨️",name:"Steam", kind:"item",  recipe:["fire","water"], info:"ingredient → Life"},
-  lava:    {em:"🌋",name:"Lava",  kind:"item",  recipe:["fire","earth"], info:"ingredient → Meteor"},
-  energy:  {em:"⚡",name:"Energy",kind:"item",  recipe:["fire","air"],   info:"ingredient → Firebolt, Plague"},
-  mud:     {em:"🟤",name:"Mud",   kind:"item",  recipe:["water","earth"],info:"ingredient → Plague"},
+  // -- traps: play them reactively OR craft them into the bigger cards below (never a dead craft) --
+  lava:    {em:"🌋",name:"Volcano",kind:"trap", trap:{retaliate:6},           recipe:["fire","earth"], info:"trap: erupt 6 if attacked · → Meteor"},
+  steam:   {em:"♨️",name:"Steam",  kind:"trap", trap:{heal:6},                recipe:["fire","water"], info:"trap: heal 6 if attacked · → Life"},
+  energy:  {em:"⚡",name:"Energy",  kind:"trap", trap:{disable:"random"},      recipe:["fire","air"],   info:"trap: shock-disable if attacked · → Firebolt/Plague"},
+  mud:     {em:"🟤",name:"Mud",    kind:"trap", trap:{retaliate:3,heal:3},    recipe:["water","earth"],info:"trap: 3 back + heal 3 if attacked · → Plague"},
   // -- attacks: damage + disable one enemy element for a round (blocking negates both) --
   storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:8, disable:"air",  counter:"mountain",recipe:["water","air"],  info:"8 dmg · disables 💨 · blocked by Mountain"},
   firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:6, disable:"water",counter:"ward",    recipe:["energy","fire"],info:"6 dmg · disables 💧 · blocked by Ward"},
@@ -798,12 +804,12 @@ function renderInv(){
     el.dataset.id = id;
     el.title = "Click to add to the combiner";
     el.innerHTML = `<span class="em">${c.em}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
-    const playable = (c.kind === "attack" || c.kind === "shield");
+    const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
     if (playable){
       el.classList.add("playable");
       const hint = document.createElement("div");
       hint.className = "playhint";
-      hint.textContent = c.kind === "shield" ? "↑ drag to defend" : "↑ drag to attack";
+      hint.textContent = c.kind === "shield" ? "↑ drag to defend" : c.kind === "trap" ? "↑ drag to set trap" : "↑ drag to attack";
       el.appendChild(hint);
     }
     el.onpointerdown = (e) => onCardPointerDown(e, id); // tap = combine, drag = play, hold = inspect
@@ -827,7 +833,7 @@ function onCardPointerDown(e, id){
   if (e.button != null && e.button > 0) return; // left button / touch only
   e.preventDefault(); // stop the browser starting a text selection on drag
   const c = CARDS[id], startX = e.clientX, startY = e.clientY;
-  const playable = (c.kind === "attack" || c.kind === "shield");
+  const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
   let moved = false, longPressed = false;
   // hold ~450ms without moving -> open the card inspector (and swallow the tap/drag)
   const lpTimer = setTimeout(() => {
@@ -967,6 +973,7 @@ async function startReveal(m){
   events.forEach((e) => {
     if (e.t === "defense") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "shield" });
     else if (e.t === "attack") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "attack" });
+    else if (e.t === "trap") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "trap" });
   });
   const hp = [shownHp[0], shownHp[1]];
   const sideHTML = (slot, cls, label) =>
@@ -1013,6 +1020,19 @@ async function startReveal(m){
         R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
       }
       await sleep(800);
+    }
+    else if (e.t === "trap"){
+      const c = CARDS[e.card];
+      if (!e.triggered){ mid.innerHTML = `${c.em} ${c.name} — 🪤 trap set, not sprung`; await sleep(600); }
+      else {
+        const bits = [], tgt = 1 - e.who;
+        if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); const el = document.getElementById("rvhp"+tgt); if (el) el.textContent = hp[tgt]; dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
+        if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; bits.push(`💚 +${e.heal}`); }
+        if (e.disable){ bits.push(`<span class="blk">⛔ ${EMO(e.disable)}</span>`); }
+        mid.innerHTML = `${c.em} ${c.name} <b>springs!</b> ${bits.join(" · ")}`;
+        R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
+        await sleep(850);
+      }
     }
   }
   await sleep(550);
@@ -1073,16 +1093,20 @@ function cardEffects(id){
     if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
     if (c.restore) E("✨", `Restores your ${EMO(c.restore)} <b>${CAP(c.restore)}</b> if it's disabled`);
     if (c.restoreAll) E("✨", `Cleanses <b>all</b> your disabled elements`);
-  } else {
-    E("🧪", `Crafting ingredient — not played directly`);
+  } else if (c.kind === "trap"){
+    const tr = c.trap || {};
+    E("🪤", `Trap — springs only if your opponent attacks you this round`);
+    if (tr.retaliate) E("💥", `Deals <b>${tr.retaliate}</b> damage back to the attacker`);
+    if (tr.heal) E("💚", `Heals you <b>${tr.heal}</b> HP`);
+    if (tr.disable) E("⛔", `Disables ${tr.disable === "random" ? "a random" : EMO(tr.disable)} enemy element next round`);
     const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${cc.em} ${cc.name}`);
-    if (usedIn.length) E("➡️", `Used to craft: <b>${usedIn.join(", ")}</b>`);
+    if (usedIn.length) E("➡️", `Also crafts into: <b>${usedIn.join(", ")}</b>`);
   }
   return rows.join("");
 }
 function openCard(id, onBack){
   const c = CARDS[id]; if (!c) return;
-  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : "Ingredient";
+  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Ingredient";
   $("sheettitle").textContent = c.name;
   $("sheetbody").innerHTML =
     `<div class="inspect">` +
@@ -1118,6 +1142,51 @@ function openLeaderboard(){
   }).catch(() => { $("sheetbody").innerHTML = `<p class="sheetnote">Couldn't load the leaderboard.</p>`; });
 }
 $("lb").onclick = openLeaderboard;
+
+// ---- patch notes (League-style changelog) ----
+const PATCH_NOTES = [
+  { v:"1.6", date:"Sep 24", title:"Traps & Patch Notes", notes:[
+    ["New", "🪤 <b>Trap cards</b> — Volcano, Steam, Energy and Mud are now playable traps that spring when your opponent attacks. Every element you craft is finally useful (or still crafts into a bigger card)."],
+    ["New", "📜 This patch notes panel."],
+  ]},
+  { v:"1.5", date:"Sep 24", title:"Style Points", notes:[
+    ["New", "🔤 Name colours, including an animated Rainbow."],
+    ["New", "🂠 Animated card backs your opponent sees when you play."],
+    ["New", "🖼️ Profile icons, and a ✏️ 20-coin name change."],
+  ]},
+  { v:"1.4", date:"Sep 23", title:"Tactical Mana", notes:[
+    ["Change", "🔷 Mana banking — base grows every 2 rounds, and you can carry 1 unspent mana into each even round."],
+    ["New", "🃏 Card inspector with a full build tree. Long-press a card in your hand to open it."],
+  ]},
+  { v:"1.3", date:"Sep 23", title:"Rewards", notes:[
+    ["New", "🪙 Coins on every win — long, hard-fought games pay the most."],
+    ["New", "🎨 Card-skin shop to spend them."],
+  ]},
+  { v:"1.2", date:"Sep 22", title:"Combat Overhaul", notes:[
+    ["Change", "⛔ Attacks now disable an enemy element for a round, on top of damage."],
+    ["Change", "🛡️ Defences gained heals and element restores; added Hearth and Dew."],
+    ["Remove", "🌀 Curse was removed."],
+  ]},
+  { v:"1.1", date:"Sep 22", title:"Quality of Life", notes:[
+    ["New", "⚔️ Central playing field for short, one-handed drags."],
+    ["New", "🂠 See your opponent's committed card count live during planning."],
+    ["Change", "Player names are now unique."],
+  ]},
+  { v:"1.0", date:"Sep 20", title:"Launch", notes:[
+    ["New", "Turn-based elemental card duel: craft → plan → simultaneous reveal."],
+    ["New", "Matchmaking, friend rooms, an AI bot, and arena ranking with tiers."],
+  ]},
+];
+function openPatch(){
+  $("sheettitle").textContent = "📜 Patch Notes";
+  const tagColor = { New:"var(--accent)", Change:"var(--shield)", Buff:"var(--you)", Nerf:"var(--foe)", Remove:"var(--foe)", Fix:"var(--amber)" };
+  $("sheetbody").innerHTML = PATCH_NOTES.map((p) =>
+    `<div class="patch"><div class="patchhead"><span class="pv">Patch ${p.v}</span> · ${p.title} <span class="s" style="color:var(--soft);font-family:var(--body);font-size:12px">${p.date}</span></div>` +
+    p.notes.map(([tag, txt]) => `<div class="pnote"><span class="ptag" style="background:${tagColor[tag] || 'var(--line)'}">${tag}</span><span>${txt}</span></div>`).join("") +
+    `</div>`).join("");
+  $("sheet").hidden = false;
+}
+$("patch").onclick = openPatch;
 
 // ---- cosmetics: equip a title unlocked by your peak tier (reuses the sheet overlay) ----
 function openCosmetics(){
@@ -1345,8 +1414,8 @@ const GUIDE = [
   { text: "That used both your Action Points. Tap <b>Ready</b> to reveal your move.", hi: ["ready"], ready: { events: [{ t: "attack", who: 0, card: "storm", blocked: false, dmg: 8 }], foeHp: 22, logs: ["💥 Your Storm hits the Practice Dummy for 8!"] } },
   { text: "💥 8 damage! Those dots next to <b>Ready</b> are your <b>Action Points</b> — your mana. Crafting costs 1, playing a card costs 1 — and you gain <b>one more every round</b>, so your plays grow.", cont: true },
   // round 2 — more AP, advance the tree to a big hit
-  { text: "New round — <b>3 AP</b> now. Build something bigger: tap <b>🔥 Fire</b>, then <b>🌍 Earth</b> → 🌋 Lava.", setup: () => tutRound(3, 22), hi: ["base:fire", "base:earth"], done: () => (inv.lava||0) > 0 },
-  { text: "Now finish the weapon: tap <b>🌋 Lava</b>, then <b>🔥 Fire</b> → ☄️ Meteor.", hi: ["card:lava", "base:fire"], done: () => (inv.meteor||0) > 0 },
+  { text: "New round — <b>3 AP</b> now. Build something bigger: tap <b>🔥 Fire</b>, then <b>🌍 Earth</b> → 🌋 Volcano.", setup: () => tutRound(3, 22), hi: ["base:fire", "base:earth"], done: () => (inv.lava||0) > 0 },
+  { text: "🌋 Volcano is a trap — but you can also craft it into a weapon: tap <b>🌋 Volcano</b>, then <b>🔥 Fire</b> → ☄️ Meteor.", hi: ["card:lava", "base:fire"], done: () => (inv.meteor||0) > 0 },
   { text: "☄️ Meteor hits for 12! Attack — <b>drag the Meteor up into the field</b>.", hi: ["card:meteor", "field"], done: () => plan.some((d) => d.card === "meteor") },
   { text: "Tap <b>Ready</b>.", hi: ["ready"], ready: { events: [{ t: "attack", who: 0, card: "meteor", blocked: false, dmg: 12 }], foeHp: 10, logs: ["💥 Your Meteor hits for 12!"] } },
   { text: "☄️ 12 down — more mana means bigger combos. But every attack has a <b>counter shield</b>. Time to defend.", cont: true },
