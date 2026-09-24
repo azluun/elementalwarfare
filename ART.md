@@ -71,6 +71,65 @@ Size **172 × 230 px**. One per card type.
 
 ---
 
-## Not yet hooked up (say the word and I'll wire them)
-Effect/UI emojis — ⚔️ the field · 🛡️ block · 💥 damage · 💚 heal · 🪤 trap · 🏆 leaderboard · 🪙 coins.
-These are still plain emoji; I can put them on the same drop-in system if you want them custom.
+## Full emoji inventory (every emoji in the game)
+
+Everything the game draws with an emoji, grouped by where it lives. **Has art** = already a
+custom PNG. **Hookable** = a drop-in slot exists (add the file). **Not hooked** = still plain
+emoji; I can put any of these on the same drop-in system on request.
+
+### Gameplay glyphs — ✅ all have art
+| emoji | id | | emoji | id |
+|---|---|---|---|---|
+| 🔥 | fire | | ⛈️ | storm |
+| 💧 | water | | 🔥 | firebolt |
+| 🌍 | earth | | ☄️ | meteor |
+| 💨 | air | | 🦠 | plague |
+| 🌋 | lava (Volcano) | | ⛰️ | mountain |
+| ♨️ | steam | | 💧 | ward |
+| ⚡ | energy · mana | | 🌐 | planet |
+| 🟤 | mud | | 🌿 | life |
+| | | | 🕯️ | hearth |
+| | | | 💦 | dew |
+
+Mana also shows the ⚡→orb everywhere (`img/mana.png`, done).
+
+### Profile avatars — Hookable (`img/icon-<id>.png`)
+🙂 default · 🔥 flame · 💧 droplet · 🌍 terra · 🌪️ gale · ☄️ comet · 🐉 dragon · 👑 monarch · 🧙 archmage
+
+### Rank tiers — Hookable (`img/tier-<id>.png`)
+🪵 wood · 🥉 bronze · 🥈 silver · 🏅 gold · 💠 platinum · 💎 diamond · 👑 champion
+
+### Combat / effect icons — Not hooked
+| emoji | meaning | emoji | meaning |
+|---|---|---|---|
+| 🛡️ | block / shield | ✨ | (spare fx) |
+| 💥 | damage | ➡️ | "crafts into" |
+| 💚 | heal | ♻️ | pure recovery |
+| ⚔️ | the field / find match | 🎯 | practice dummy |
+| 🪤 | trap | ✋ | locked in, no cards |
+| ⛔ | (legacy disable icon) | 🔒 | opponent locked in |
+
+### Result banners — Not hooked
+🏆 Victory · ☠️ Defeated · ⚖️ Draw
+
+### Menu & UI buttons — Not hooked
+| emoji | where | emoji | where |
+|---|---|---|---|
+| 🪙 | coins | ✏️ | Rename |
+| 🎨 | Skins | 🏳 | Forfeit |
+| 🖼️ | Icons | 🤖 | Play vs Bot |
+| 🎖️ | Titles | ❔ | How to play |
+| 🔤 | Name Color | 🔎 | searching… |
+| 📖 | Guide | ↩ | Undo / Un-ready |
+| 📜 | Patch Notes | ⏱ | round timer |
+| 🏆 | Leaderboard | ⚙️ | Elemental Bot |
+| 🛠 / 🛠️ | Dev tools | 🧹 | Normalize (dev) |
+| ⚠ | warnings | | |
+
+### Changelog / decorative (inside Patch Notes text — low value)
+🌀 · 🔷 · 🃏 · 📱 · 👋
+
+---
+
+*Want me to wire up any group above (combat icons, result banners, menu buttons) to the drop-in
+art system so you can replace them with PNGs? Just name the group.*
