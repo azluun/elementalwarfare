@@ -500,7 +500,8 @@ $("joinbtn").onclick = () => {
 };
 
 // ---- Google sign-in (persistent) + profile; the guided tutorial runs after first login ----
-let lastIdToken = null;
+let lastIdToken = null, tokenWaiters = [];
+try { lastIdToken = localStorage.getItem("duel.idtoken") || null; } catch(e){} // reuse the last token across a reload (server re-checks it; a stale one triggers a silent refresh)
 setTimeout(() => { try { const c = JSON.parse(localStorage.getItem("duel.profile")); if (c && c.id) setProfile(c); } catch(e){} }, 0); // restore session (after consts init)
 fetch("/config").then((r) => r.json()).then((cfg) => {
   if (!cfg.googleClientId){ if (!profile) $("signinnote").textContent = "⚠ Sign-in isn't set up on this server yet."; return; }
@@ -515,7 +516,47 @@ fetch("/config").then((r) => r.json()).then((cfg) => {
   document.head.appendChild(s);
 }).catch(() => {});
 
-function onGoogleCredential(resp){ lastIdToken = resp.credential; submitAuth(null); }
+function onGoogleCredential(resp){
+  lastIdToken = resp.credential;
+  try { localStorage.setItem("duel.idtoken", resp.credential); } catch(e){}
+  const waiters = tokenWaiters; tokenWaiters = [];               // wake anything waiting on a fresh token
+  waiters.forEach((fn) => { try { fn(resp.credential); } catch(e){} });
+  if (!profile){ submitAuth(null); return; }                    // brand-new sign-in → full login flow
+  $("gsigninbtn").hidden = true; $("signinnote").hidden = true; // a refresh for an existing session → clear any "expired" prompt
+}
+// Google ID tokens expire (~1h) and aren't reissued automatically on reload, so authenticated calls grab a
+// fresh one on demand. ensureToken() resolves with a usable token (silently re-prompting Google) or null.
+function ensureToken(){
+  return new Promise((resolve) => {
+    if (lastIdToken) return resolve(lastIdToken);
+    let settled = false;
+    const finish = (t) => { if (!settled){ settled = true; resolve(t || null); } };
+    tokenWaiters.push(finish);
+    try { if (window.google && google.accounts) google.accounts.id.prompt(); } catch(e){}
+    setTimeout(() => finish(lastIdToken), 4000); // give Google a moment, then resolve with whatever we have
+  });
+}
+// POST to an authenticated endpoint with a valid token; on 401 (missing/stale) refresh once and retry,
+// and if we still can't authenticate, drop the broken session and ask the player to sign in again.
+async function authFetch(url, payload){
+  const post = (tok) => fetch(url, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(Object.assign({}, payload, { idToken: tok })) });
+  let token = await ensureToken();
+  let r = token ? await post(token) : null;
+  if (!r || r.status === 401){
+    lastIdToken = null; try { localStorage.removeItem("duel.idtoken"); } catch(e){}
+    token = await ensureToken();
+    r = token ? await post(token) : null;
+    if (!r || r.status === 401){ sessionExpired(); throw new Error("auth-required"); }
+  }
+  return r;
+}
+function sessionExpired(){
+  $("sheet").hidden = true; $("namemodal").hidden = true;
+  $("gsigninbtn").hidden = false; $("signinnote").hidden = false;
+  $("signinnote").textContent = "⚠ Your session expired — please sign in again to keep playing.";
+  try { google.accounts.id.prompt(); } catch(e){}
+}
 function submitAuth(name){
   fetch("/auth", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -529,10 +570,13 @@ function submitAuth(name){
 function maybeStartTutorial(){ if (profile && !profile.tutorialDone && !tutorialMode) startTutorial(); }
 function cacheProfile(){ try { localStorage.setItem("duel.profile", JSON.stringify(profile)); } catch(e){} }
 function syncProgress(){ // push discovered + tutorial flag to the DB, pull back the authoritative profile
-  if (!profile || !lastIdToken) return;
-  fetch("/auth", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ idToken: lastIdToken, tutorialDone: profile.tutorialDone, discovered: [...discovered] }) })
-    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); } }).catch(() => {});
+  if (!profile) return; // best-effort: skip silently if we can't get a token (don't nag mid-game)
+  ensureToken().then((token) => {
+    if (!token) return;
+    fetch("/auth", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ idToken: token, tutorialDone: profile.tutorialDone, discovered: [...discovered] }) })
+      .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); } }).catch(() => {});
+  });
 }
 function showNameModal(suggested, taken){
   renameMode = false; // first-login flow, not a paid rename
@@ -644,7 +688,7 @@ function refreshProfileBox(){
 }
 $("signout").onclick = () => {
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
-  try { localStorage.removeItem("duel.profile"); } catch(e){}
+  try { localStorage.removeItem("duel.profile"); localStorage.removeItem("duel.idtoken"); } catch(e){}
   profile = null; lastIdToken = null;
   $("menu").hidden = true;
   $("profilebox").hidden = true;
@@ -1243,8 +1287,9 @@ function openCosmetics(){
   $("sheet").hidden = false;
 }
 function equipTitle(title){
-  fetch("/cosmetic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: lastIdToken, title }) })
-    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; refreshProfileBox(); openCosmetics(); } });
+  authFetch("/cosmetic", { title })
+    .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; refreshProfileBox(); openCosmetics(); } })
+    .catch(() => {});
 }
 $("cosmetics").onclick = openCosmetics;
 
@@ -1331,8 +1376,7 @@ function openBackShop(){
 const SHOP_REOPEN = { skin: openShop, icon: openIconShop, color: openColorShop, back: openBackShop };
 function shopAction(action, item, kind){
   kind = kind || "skin";
-  fetch("/shop", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ idToken: lastIdToken, action, kind, item, skin: item, icon: item }) }) // skin/icon kept for back-compat
+  authFetch("/shop", { action, kind, item, skin: item, icon: item }) // skin/icon kept for back-compat
     .then((r) => r.json()).then((d) => {
       if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); (SHOP_REOPEN[kind] || openShop)(); }
     }).catch(() => {});
@@ -1357,20 +1401,19 @@ function openRename(){
 }
 function doRename(n){
   $("pnamesave").disabled = true;
-  fetch("/shop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: lastIdToken, action: "rename", name: n }) })
+  authFetch("/shop", { action: "rename", name: n })
     .then((r) => r.json()).then((d) => {
       $("pnamesave").disabled = false;
       if (d.profile){ profile = d.profile; cacheProfile(); $("namemodal").hidden = true; renameMode = false; refreshProfileBox(); }
       else { $("pnameerr").style.color = "var(--foe)"; $("pnameerr").textContent = d.error === "name taken" ? "⚠ That name is taken." : d.error === "not enough coins" ? "⚠ You need 🪙 20 to change your name." : (d.error || "Failed — try again."); }
-    }).catch(() => { $("pnamesave").disabled = false; $("pnameerr").textContent = "Network error."; });
+    }).catch((e) => { $("pnamesave").disabled = false; if (e.message !== "auth-required") $("pnameerr").textContent = "Network error."; });
 }
 $("rename").onclick = openRename;
 
 // ---- dev-only profile admin (view / repair / normalize); server enforces DEV_EMAILS ----
 function adminCall(action, extra){
-  return fetch("/admin", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify(Object.assign({ idToken: lastIdToken, action }, extra || {})) })
-    .then((r) => r.json()).catch(() => ({ error: "network error" }));
+  return authFetch("/admin", Object.assign({ action }, extra || {}))
+    .then((r) => r.json()).catch((e) => ({ error: e.message === "auth-required" ? "session expired — sign in again" : "network error" }));
 }
 function openAdmin(){
   if (!profile || !profile.dev) return;

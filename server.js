@@ -18,6 +18,16 @@ if (GOOGLE_CLIENT_ID) {
   try { const { OAuth2Client } = require("google-auth-library"); googleClient = new OAuth2Client(GOOGLE_CLIENT_ID); }
   catch (e) { console.error("google-auth-library not installed; sign-in disabled:", e.message); }
 }
+// Verify a Google ID token, returning its payload. Auth failures (missing/expired/invalid token, or
+// sign-in not configured) are tagged status 401 so handlers can tell them apart from business errors
+// (e.g. "not enough coins"), letting the client silently refresh the token and retry.
+async function verifyToken(idToken) {
+  if (!googleClient) { const e = new Error("sign-in not configured"); e.status = 401; throw e; }
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+    return ticket.getPayload();
+  } catch (e) { e.status = 401; throw e; }
+}
 
 // verify a Google ID token, then load/create that player's profile (merging any local discoveries)
 async function handleAuth(req, res) {
@@ -69,10 +79,9 @@ async function handleCosmetic(req, res) {
   req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
   req.on("end", async () => {
     try {
-      if (!googleClient) throw new Error("sign-in not configured");
       const { idToken, title } = JSON.parse(body || "{}");
-      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-      const prof = await store.getProfileAsync(ticket.getPayload().sub);
+      const payload = await verifyToken(idToken);
+      const prof = await store.getProfileAsync(payload.sub);
       if (!prof) throw new Error("no profile");
       const peakTier = tierIndex(prof.peak || prof.rating || 1000);
       const okDev = title === "developer" && prof.dev;                            // secret title
@@ -85,7 +94,7 @@ async function handleCosmetic(req, res) {
       }
       throw new Error("not unlocked");
     } catch (e) {
-      res.writeHead(400, { "content-type": "application/json" });
+      res.writeHead(e.status || 400, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
   });
@@ -97,10 +106,9 @@ async function handleShop(req, res) {
   req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
   req.on("end", async () => {
     try {
-      if (!googleClient) throw new Error("sign-in not configured");
       const { idToken, action, kind, item, skin, icon, name } = JSON.parse(body || "{}");
-      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-      const prof = await store.getProfileAsync(ticket.getPayload().sub);
+      const payload = await verifyToken(idToken);
+      const prof = await store.getProfileAsync(payload.sub);
       if (!prof) throw new Error("no profile");
       if (prof.coins == null) prof.coins = 0;
       // backfill any missing cosmetic fields
@@ -130,7 +138,7 @@ async function handleShop(req, res) {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ profile: prof }));
     } catch (e) {
-      res.writeHead(400, { "content-type": "application/json" });
+      res.writeHead(e.status || 400, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
   });
@@ -142,10 +150,9 @@ async function handleAdmin(req, res) {
   req.on("data", (c) => { body += c; if (body.length > 2e5) req.destroy(); });
   req.on("end", async () => {
     try {
-      if (!googleClient) throw new Error("sign-in not configured");
       const { idToken, action, id, profile } = JSON.parse(body || "{}");
-      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-      const email = (ticket.getPayload().email || "").toLowerCase();
+      const payload = await verifyToken(idToken);
+      const email = (payload.email || "").toLowerCase();
       if (!DEV_EMAILS.has(email)) throw new Error("not authorized"); // only listed dev accounts
       const ok = (obj) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
       if (action === "list") {
@@ -167,7 +174,7 @@ async function handleAdmin(req, res) {
       }
       throw new Error("bad action");
     } catch (e) {
-      res.writeHead(e.message === "not authorized" ? 403 : 400, { "content-type": "application/json" });
+      res.writeHead(e.message === "not authorized" ? 403 : (e.status || 400), { "content-type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
   });
