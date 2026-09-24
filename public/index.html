@@ -431,9 +431,9 @@ const CARDS = {
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
 const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
-// some elements are drawn as a pixel-art image instead of an emoji; glyph() returns HTML (img or emoji text)
-const IMG_EL = { fire: "img/fire.png" };
-const glyph = (id) => IMG_EL[id] ? `<img class="elglyph" src="${IMG_EL[id]}" alt="${id}">` : EMO(id);
+// elements and cards that have custom pixel-art (else fall back to the emoji). glyph() returns HTML.
+const IMG = { fire:"img/fire.png", air:"img/air.png", earth:"img/earth.png", meteor:"img/meteor.png", plague:"img/plague.png", lava:"img/lava.png" };
+const glyph = (id) => IMG[id] ? `<img class="elglyph" src="${IMG[id]}" alt="${id}">` : EMO(id);
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
@@ -726,7 +726,7 @@ function applyPlayers(players){
   $("myname").innerHTML = fighterLabel(me, true); $("foename").innerHTML = fighterLabel(foe, false);
   $("myhp").textContent = me.hp; $("foehp").textContent = foe.hp;
   $("mybar").style.width = (me.hp/30*100)+"%"; $("foebar").style.width = (foe.hp/30*100)+"%";
-  $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${CARDS[s].em} ${CARDS[s].name}</span>`).join("") || "";
+  $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${glyph(s)} ${CARDS[s].name}</span>`).join("") || "";
   $("foeshields").textContent = "Shields: " + foe.shields.length;
   myDisabled = new Set(me.disabled || []);
   $("lockwarn").innerHTML = myDisabled.size ? `⛔ ${[...myDisabled].map(glyph).join(" ")} disabled this round` : "";
@@ -808,7 +808,7 @@ function renderInv(){
     el.className = "card " + c.kind;
     el.dataset.id = id;
     el.title = "Click to add to the combiner";
-    el.innerHTML = `<span class="em">${c.em}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
+    el.innerHTML = `<span class="em">${glyph(id)}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${c.info}</span>`;
     const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
     if (playable){
       el.classList.add("playable");
@@ -867,7 +867,7 @@ function onCardPointerDown(e, id){
 function startDrag(id, c){
   const g = document.createElement("div");
   g.className = "dragghost";
-  g.innerHTML = `<span class="em">${c.em}</span><span>${c.name}</span>`;
+  g.innerHTML = `<span class="em">${glyph(id)}</span><span>${c.name}</span>`;
   document.body.appendChild(g);
   drag = { id, ghost: g };
   document.body.classList.add("dragging"); // suppress text selection page-wide during the drag
@@ -894,7 +894,7 @@ function renderPlan(){
     const c = CARDS[d.card];
     const t = document.createElement("div");
     t.className = "playtile " + d.k;
-    t.innerHTML = `<span class="em">${c.em}</span><span class="nm">${c.name}</span>`;
+    t.innerHTML = `<span class="em">${glyph(d.card)}</span><span class="nm">${c.name}</span>`;
     if (!locked){ const x=document.createElement("button"); x.className="rm"; x.textContent="✕"; x.title="recall"; x.onclick=()=>unstage(idx); t.appendChild(x); }
     p.appendChild(t);
   });
@@ -976,9 +976,9 @@ async function startReveal(m){
   const foeSlot = 1 - myslot, meSlot = myslot;
   const hand = { 0: [], 1: [] };
   events.forEach((e) => {
-    if (e.t === "defense") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "shield" });
-    else if (e.t === "attack") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "attack" });
-    else if (e.t === "trap") hand[e.who].push({ em: CARDS[e.card].em, nm: CARDS[e.card].name, k: "trap" });
+    if (e.t === "defense") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "shield" });
+    else if (e.t === "attack") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "attack" });
+    else if (e.t === "trap") hand[e.who].push({ em: glyph(e.card), nm: CARDS[e.card].name, k: "trap" });
   });
   const hp = [shownHp[0], shownHp[1]];
   const sideHTML = (slot, cls, label) =>
@@ -1010,16 +1010,16 @@ async function startReveal(m){
       if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; }
       if (e.restore) bits.push(`✨ ${glyph(e.restore)} back`);
       if (e.restoreAll) bits.push(`✨ cleanse all`);
-      mid.innerHTML = `${c.em} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`;
+      mid.innerHTML = `${glyph(e.card)} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`;
       await sleep(650);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
-      if (e.blocked){ mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
+      if (e.blocked){ mid.innerHTML = `${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`; }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg);
         const dis = e.disable ? ` <span class="blk">⛔ ${glyph(e.disable)}</span>` : "";
-        mid.innerHTML = `${CARDS[e.card].em} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`;
+        mid.innerHTML = `${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>${dis}`;
         const hpEl = document.getElementById("rvhp" + tgt); if (hpEl) hpEl.textContent = hp[tgt];
         dmgFloat(tgt, e.dmg);
         R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
@@ -1028,13 +1028,13 @@ async function startReveal(m){
     }
     else if (e.t === "trap"){
       const c = CARDS[e.card];
-      if (!e.triggered){ mid.innerHTML = `${c.em} ${c.name} — 🪤 trap set, not sprung`; await sleep(600); }
+      if (!e.triggered){ mid.innerHTML = `${glyph(e.card)} ${c.name} — 🪤 trap set, not sprung`; await sleep(600); }
       else {
         const bits = [], tgt = 1 - e.who;
         if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); const el = document.getElementById("rvhp"+tgt); if (el) el.textContent = hp[tgt]; dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
         if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); const el = document.getElementById("rvhp"+e.who); if (el) el.textContent = hp[e.who]; bits.push(`💚 +${e.heal}`); }
         if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
-        mid.innerHTML = `${c.em} ${c.name} <b>springs!</b> ${bits.join(" · ")}`;
+        mid.innerHTML = `${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`;
         R.classList.add("hitshake"); setTimeout(() => R.classList.remove("hitshake"), 320);
         await sleep(850);
       }
@@ -1056,13 +1056,13 @@ function renderSheet(mode){
   const attacks = Object.entries(CARDS).filter(([id, c]) => c.kind === "attack");
   const counterRows = attacks.filter(([id]) => !known || discovered.has(id)).map(([id, c]) => {
     const s = CARDS[c.counter];
-    const blk = (!known || discovered.has(c.counter)) ? `${s.em} ${s.name}` : "🔒 ???";
+    const blk = (!known || discovered.has(c.counter)) ? `${glyph(c.counter)} ${s.name}` : "🔒 ???";
     const dis = c.disable ? ` · ⛔${glyph(c.disable)}` : "";
-    return `<div class="crow click" data-card="${id}"><span class="a">${c.em} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
+    return `<div class="crow click" data-card="${id}"><span class="a">${glyph(id)} ${c.name}</span><span>${c.dmg} dmg${dis}</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
   }).join("");
 
   const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
-    .map((id) => `<div class="rrow click" data-card="${id}">${CARDS[id].em} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
+    .map((id) => `<div class="rrow click" data-card="${id}">${glyph(id)} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
 
   const foot = known
     ? (discovered.size === 0
@@ -1084,7 +1084,7 @@ function buildNode(id){
   if (BASE[id]) return `<li><div class="tnode base"><span class="tem">${glyph(id)}</span><span class="tnm">${CAP(id)}</span></div></li>`;
   const c = CARDS[id];
   const kids = (c.recipe || []).map(buildNode).join("");
-  return `<li><div class="tnode ${c.kind}" data-card="${id}"><span class="tem">${c.em}</span><span class="tnm">${c.name}</span></div>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
+  return `<li><div class="tnode ${c.kind}" data-card="${id}"><span class="tem">${glyph(id)}</span><span class="tnm">${c.name}</span></div>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
 }
 function cardEffects(id){
   const c = CARDS[id], rows = [];
@@ -1092,9 +1092,9 @@ function cardEffects(id){
   if (c.kind === "attack"){
     E("💥", `Deals <b>${c.dmg}</b> damage`);
     if (c.disable) E("⛔", `Disables the enemy's ${glyph(c.disable)} <b>${CAP(c.disable)}</b> for their next round`);
-    const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${cc.em} ${cc.name}</b>`);
+    const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${glyph(c.counter)} ${cc.name}</b>`);
   } else if (c.kind === "shield"){
-    if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${a.em} ${a.name}</b> — negates its damage and disable`); }
+    if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${glyph(c.blocks)} ${a.name}</b> — negates its damage and disable`); }
     if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
     if (c.restore) E("✨", `Restores your ${glyph(c.restore)} <b>${CAP(c.restore)}</b> if it's disabled`);
     if (c.restoreAll) E("✨", `Cleanses <b>all</b> your disabled elements`);
@@ -1104,7 +1104,7 @@ function cardEffects(id){
     if (tr.retaliate) E("💥", `Deals <b>${tr.retaliate}</b> damage back to the attacker`);
     if (tr.heal) E("💚", `Heals you <b>${tr.heal}</b> HP`);
     if (tr.disable) E("⛔", `Disables ${tr.disable === "random" ? "a random" : glyph(tr.disable)} enemy element next round`);
-    const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${cc.em} ${cc.name}`);
+    const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${glyph(k)} ${cc.name}`);
     if (usedIn.length) E("➡️", `Also crafts into: <b>${usedIn.join(", ")}</b>`);
   }
   return rows.join("");
@@ -1115,10 +1115,10 @@ function openCard(id, onBack){
   $("sheettitle").textContent = c.name;
   $("sheetbody").innerHTML =
     `<div class="inspect">` +
-      `<div class="icard ${c.kind}"><div class="iem">${c.em}</div><div class="inm">${c.name}</div><div class="ikind">${kindName}</div></div>` +
+      `<div class="icard ${c.kind}"><div class="iem">${glyph(id)}</div><div class="inm">${c.name}</div><div class="ikind">${kindName}</div></div>` +
       `<div class="isection">Effects</div><div class="ieffects">${cardEffects(id)}</div>` +
       `<div class="isection">Build tree</div><div class="treewrap"><ul class="tree">${buildNode(id)}</ul></div>` +
-      `<div class="ieff" style="align-self:stretch;justify-content:center;color:var(--soft)">Recipe: ${ingredients(c)} → ${c.em} ${c.name}</div>` +
+      `<div class="ieff" style="align-self:stretch;justify-content:center;color:var(--soft)">Recipe: ${ingredients(c)} → ${glyph(id)} ${c.name}</div>` +
     `</div>` +
     `<div class="row" style="margin-top:12px"><button id="cardback">← Back</button></div>`;
   $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card, onBack)); // drill into sub-cards
