@@ -280,6 +280,7 @@ function stateOf(room) {
       nameColor: p.nameColor || "default",
       back: p.cardBack || "default",
       skin: p.cardSkin || "default",    // card-background skin, so the reveal showcase can use the owner's skin
+      traps: p.traps ? p.traps.slice() : [], // set traps that persist until they spring (foe's shown anonymously)
       rating: p.rating != null ? p.rating : null,
     };
   });
@@ -289,7 +290,7 @@ function pushState(room, log) {
 }
 function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], traps: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
     playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", icon: prof ? (prof.icon || "default") : "default",
     nameColor: prof ? (prof.nameColor || "default") : "default", cardBack: prof ? (prof.cardBack || "default") : "default",
     cardSkin: prof ? (prof.cardSkin || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
@@ -297,7 +298,7 @@ function addPlayer(ws, room, name) {
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
   if (room.players.length === 2) {
-    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
     room.round = 1;
     beginRound(room, "start");
   } else {
@@ -373,20 +374,21 @@ function resolveRound(room) {
       logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}${disable ? ` (disables ${disable})` : ""}`);
     }
   }
-  // 3) traps — fire only if the opponent attacked you this round (they "walked into" it)
+  // 3) traps — a set trap stays hidden on the board until the opponent attacks you; then ALL your set traps spring.
+  //    Newly-set traps join the persistent set first (so a trap set this round can spring this round too).
+  for (const p of [A, B]) for (const d of of(p, "trap")) p.traps.push(d.card);
   for (const [me, opp] of [[A, B], [B, A]]) {
-    const sprung = of(opp, "attack").length > 0;
-    for (const d of of(me, "trap")) {
-      const tr = TRAPS[d.card]; if (!tr) continue;
-      const ev = { t: "trap", who: slot(me), card: d.card, triggered: sprung, retaliate: 0, heal: 0, disable: null };
-      if (sprung) {
-        if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
-        if (tr.heal) { const before = me.hp; me.hp = Math.min(START_HP, me.hp + tr.heal); ev.heal = me.hp - before; }
-        if (tr.disable) { const el = tr.disable === "random" ? ["fire","water","earth","air"][(Math.random() * 4) | 0] : tr.disable; opp.disabled = opp.disabled || {}; opp.disabled[el] = room.round + DISABLE_ROUNDS; ev.disable = el; }
-        logs.push(`🪤 ${me.name}'s ${d.card} trap springs on ${opp.name}!`);
-      } else logs.push(`🪤 ${me.name}'s ${d.card} trap goes unsprung`);
+    if (of(opp, "attack").length === 0 || !me.traps.length) continue; // not attacked → traps stay set & hidden (no event)
+    for (const card of me.traps) {
+      const tr = TRAPS[card]; if (!tr) continue;
+      const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, heal: 0, disable: null };
+      if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
+      if (tr.heal) { const before = me.hp; me.hp = Math.min(START_HP, me.hp + tr.heal); ev.heal = me.hp - before; }
+      if (tr.disable) { const el = tr.disable === "random" ? ["fire","water","earth","air"][(Math.random() * 4) | 0] : tr.disable; opp.disabled = opp.disabled || {}; opp.disabled[el] = room.round + DISABLE_ROUNDS; ev.disable = el; }
       events.push(ev);
+      logs.push(`🪤 ${me.name}'s ${card} trap springs on ${opp.name}!`);
     }
+    me.traps = []; // all sprung traps are spent
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
@@ -497,9 +499,9 @@ wss.on("connection", (ws) => {
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
-      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0, isBot: true };
+      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], traps: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0, isBot: true };
       room.players.push(bot); // slot 1
-      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
       room.round = 1;
       beginRound(room, "start");
       return;

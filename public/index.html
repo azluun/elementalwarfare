@@ -84,6 +84,8 @@
   .setcard .sc-nm{font-size:8.5px;font-weight:700;text-align:center;line-height:1.03;max-width:100%;padding:0 2px}
   .setcard.def .sc-nm{display:none}
   .setcard.attack{border-color:var(--foe)} .setcard.shield{border-color:var(--shield)} .setcard.trap{border-color:var(--trap)}
+  .setcard.committed{opacity:.86}                 /* already set in an earlier round — waits until used */
+  .setcard.committed::after{content:"🂠";position:absolute;bottom:1px;right:3px;font-size:9px;opacity:.5}
   .setcard .rm{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--panel);
     border:1px solid var(--line);color:var(--soft);font-size:11px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;z-index:2}
   .setcard.back{color:rgba(233,236,223,.5);font-size:17px;
@@ -830,6 +832,8 @@ let animating = false, pendingRound = null, pendingOver = null, shownHp = [30,30
 let foeStaged = 0;      // how many cards the opponent has set this round (updates live)
 let foeKinds = [];      // the KIND of each (attack/shield/trap) so we can orient the face-down backs — never the identity
 let foeLocked = false;  // has the opponent hit Ready (committed) this round?
+let mySet = [];         // my persistent set cards (shield + trap ids) that stay on the board until used
+let foeSetKinds = [];   // the foe's persistent set cards, kinds only (shown as anonymous oriented backs)
 const apLeft = () => apBudget - apSpent;
 const canAct = () => !locked && apLeft() > 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -857,8 +861,12 @@ function applyPlayers(players){
   $("myname").innerHTML = fighterLabel(me, true); $("foename").innerHTML = fighterLabel(foe, false);
   $("myhp").textContent = me.hp; $("foehp").textContent = foe.hp;
   $("mybar").style.width = (me.hp/30*100)+"%"; $("foebar").style.width = (foe.hp/30*100)+"%";
-  $("myshields").innerHTML = me.shields.map(s=>`<span class="chip">${glyph(s)} ${CARDS[s].name}</span>`).join("") || "";
-  $("foeshields").textContent = "Shields: " + foe.shields.length;
+  // persistent set cards (shields + traps) live on the board now, not as badge chips
+  const setCount = (me.shields||[]).length + (me.traps||[]).length;
+  $("myshields").textContent = setCount ? `🂠 ${setCount} set` : "";
+  $("foeshields").textContent = ((foe.shields||[]).length + (foe.traps||[]).length) ? `🂠 ${(foe.shields||[]).length + (foe.traps||[]).length} set` : "";
+  mySet = [...(me.shields||[]), ...(me.traps||[])];
+  foeSetKinds = [...Array((foe.shields||[]).length).fill("shield"), ...Array((foe.traps||[]).length).fill("trap")];
   myDisabled = new Set(me.disabled || []);
   $("lockwarn").innerHTML = myDisabled.size ? `⛔ ${[...myDisabled].map(glyph).join(" ")} disabled this round` : "";
   shownHp = [players[0].hp, players[1].hp];
@@ -1037,33 +1045,41 @@ function endDrag(){
 }
 // orientation class: shields lie sideways (defense position), attacks & traps sit upright
 const posClass = (kind) => kind === "shield" ? " def" : "";
-// your set cards — face-up to you, oriented YGO-style, on your side of the board
+// your side: persistent set cards (shields/traps carried over, face-up to you) + this round's plays (recallable)
 function renderPlan(){
   const p = $("fieldme");
-  if (!plan.length){ p.innerHTML = `<span class="fieldempty">Drag a card up here to set it — attack, trap or defense</span>`; return; }
   p.innerHTML = "";
-  plan.forEach((d, idx) => {
+  (mySet || []).forEach((id) => {           // already committed in earlier rounds — stays until used, no recall
+    const c = CARDS[id]; if (!c) return;
+    const t = document.createElement("div");
+    t.className = "setcard mine committed " + c.kind + posClass(c.kind);
+    t.dataset.cardPreview = id;
+    t.innerHTML = `<span class="sc-art">${glyph(id)}</span><span class="sc-nm">${c.name}</span>`;
+    p.appendChild(t);
+  });
+  plan.forEach((d, idx) => {                 // this round's staged plays
     const c = CARDS[d.card];
     const t = document.createElement("div");
-    t.className = "setcard mine " + d.k + posClass(d.k);
+    t.className = "setcard mine fresh " + d.k + posClass(d.k);
     t.dataset.cardPreview = d.card; // hover / long-press to see the full card
     t.innerHTML = `<span class="sc-art">${glyph(d.card)}</span><span class="sc-nm">${c.name}</span>`;
     if (!locked){ const x=document.createElement("button"); x.className="rm"; x.textContent="✕"; x.title="recall"; x.onclick=()=>unstage(idx); t.appendChild(x); }
     p.appendChild(t);
   });
+  if (!p.children.length) p.innerHTML = `<span class="fieldempty">Drag a card up here to set it — attack, trap or defense</span>`;
 }
-// the opponent's side — oriented FACE-DOWN backs (shields sideways), never the identity; you only ever see kind + count
+// the opponent's side — persistent set + this round's plays, all as oriented FACE-DOWN backs; never the identity
 function renderFoeField(){
   const f = $("fieldfoe");
   if (tutorialMode){ f.innerHTML = `<span class="fieldempty">🎯 Practice Dummy</span>`; return; }
-  const kinds = foeKinds || [];
-  if (!kinds.length){
-    f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} — no cards set` : `🂠 ${foeName} is planning…`}</span>`;
+  const skin = foeBack !== "default" ? " " + foeBack : "";
+  const back = (k) => `<div class="setcard back${posClass(k)}${skin}"><span class="sc-art">🂠</span></div>`;
+  const all = [...(foeSetKinds || []), ...(foeKinds || [])];
+  if (!all.length){
+    f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} — nothing new set` : `🂠 ${foeName} is planning…`}</span>`;
     return;
   }
-  const skin = foeBack !== "default" ? " " + foeBack : "";
-  f.innerHTML = `<span class="foelabel">${foeLocked ? `🔒 ${foeName} locked in ${kinds.length}` : `🂠 ${foeName} is setting…`}</span>` +
-    kinds.map((k) => `<div class="setcard back${posClass(k)}${skin}"><span class="sc-art">🂠</span></div>`).join("");
+  f.innerHTML = `<span class="foelabel">${foeLocked ? `🔒 ${foeName} locked in` : `🂠 ${foeName}'s board`}</span>` + all.map(back).join("");
 }
 // tell the opponent our live card count whenever we play or cancel one (backs only — never which cards)
 function sendFieldCount(){ if (!tutorialMode && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "field", kinds: plan.map(d => d.k) })); }
@@ -1135,56 +1151,37 @@ async function startReveal(m){
     if (pendingOver){ const o = pendingOver; pendingOver = null; showOver(o); }
     else if (pendingRound){ const r = pendingRound; pendingRound = null; newRound(r); }
   };
-  if (!events.length){ finish(); return; } // both sides did nothing — no drama to show
+  // only cards that actually DO something this round are revealed — the rest stay face-down on the board
+  const acts = events.filter((e) =>
+    e.t === "attack" ||                                            // attacks always resolve
+    (e.t === "trap" && e.triggered) ||                             // only sprung traps
+    (e.t === "defense" && (e.heal > 0 || e.restore || e.restoreAll))); // shields only when they heal/restore now
+  if (!acts.length){ finish(); return; } // everything just sat there face-down — nothing to reveal
   animating = true;
-  const foeSlot = 1 - myslot, meSlot = myslot;
   const hp = [shownHp[0], shownHp[1]];
-  const zoneEl = (slot) => document.getElementById(slot === meSlot ? "fieldme" : "fieldfoe");
-  // gather each side's actual cards from the authoritative events
-  const sideCards = { [foeSlot]: [], [meSlot]: [] };
-  events.forEach((e) => {
-    if (e.t === "defense") sideCards[e.who].push({ id: e.card, k: "shield" });
-    else if (e.t === "attack") sideCards[e.who].push({ id: e.card, k: "attack" });
-    else if (e.t === "trap") sideCards[e.who].push({ id: e.card, k: "trap" });
-  });
-  // lay both zones out as face-down (edge-on) cards, oriented, then flip them up in place
-  for (const slot of [foeSlot, meSlot]){
-    const z = zoneEl(slot), cards = sideCards[slot];
-    z.innerHTML = cards.length
-      ? cards.map((c) => `<div class="setcard back flip${posClass(c.k)}"></div>`).join("")
-      : `<span class="fieldempty">— held back —</span>`;
-  }
-  CLASH("Reveal!");
-  await sleep(160);
-  const flips = [];
-  for (const slot of [foeSlot, meSlot]){
-    const z = zoneEl(slot), cards = sideCards[slot];
-    [...z.querySelectorAll(".setcard")].forEach((el, i) => flips.push(new Promise((res) => setTimeout(() => {
-      const c = cards[i];
-      el.className = "setcard " + c.k + posClass(c.k);
-      el.innerHTML = `<span class="sc-art">${glyph(c.id)}</span><span class="sc-nm">${CARDS[c.id].name}</span>`;
-      res();
-    }, i * 150 + (slot === foeSlot ? 0 : 80)))));
-  }
-  await Promise.all(flips);
-  await sleep(340);
-
   const shakeBoard = () => { const B = $("field"); B.classList.add("hitshake"); setTimeout(() => B.classList.remove("hitshake"), 320); };
-  for (const e of events){
-    if (e.t === "defense"){
-      const c = CARDS[e.card], bits = [];
-      if (e.block) bits.push(`🛡️ ${c.name}`);
+  CLASH("⚔️ Clash!");
+  await sleep(320);
+
+  for (const e of acts){
+    if (e.t === "defense"){                                        // a shield that heals / restores / cleanses
+      showcaseCard(e.card, e.who); await sleep(500);
+      const bits = [];
       if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
       if (e.restore) bits.push(`✨ ${glyph(e.restore)} back`);
       if (e.restoreAll) bits.push(`✨ cleanse all`);
-      CLASH(`${glyph(e.card)} ${sideName(e.who)} — ${bits.join(" · ") || c.name}`);
-      await sleep(650);
+      CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name} — ${bits.join(" · ")}`);
+      await sleep(850);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
-      showcaseCard(e.card, e.who); // the attack card leaps to centre-screen, in the owner's skin
-      await sleep(480);            // let it land before the damage lands
-      if (e.blocked){ CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ BLOCKED</span>`); }
+      showcaseCard(e.card, e.who); // the attack leaps to centre-screen in the owner's skin
+      await sleep(520);
+      if (e.blocked){
+        const shieldId = CARDS[e.card].counter;                    // reveal the shield that mattered
+        CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ ${CARDS[shieldId] ? CARDS[shieldId].name : "blocked"}</span>`);
+        if (CARDS[shieldId]){ await sleep(280); showcaseCard(shieldId, tgt); }
+      }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
         const dis = e.disable ? ` <span class="blk">⛔ ${glyph(e.disable)}</span>` : "";
@@ -1193,21 +1190,18 @@ async function startReveal(m){
       }
       await sleep(950);
     }
-    else if (e.t === "trap"){
-      const c = CARDS[e.card];
-      if (!e.triggered){ CLASH(`${glyph(e.card)} ${c.name} — 🪤 set, not sprung`); await sleep(600); }
-      else {
-        const bits = [], tgt = 1 - e.who;
-        if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
-        if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
-        if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
-        CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
-        shakeBoard();
-        await sleep(850);
-      }
+    else if (e.t === "trap"){                                      // only sprung traps reach here
+      const c = CARDS[e.card], bits = [], tgt = 1 - e.who;
+      showcaseCard(e.card, e.who); await sleep(520);
+      if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
+      if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
+      if (e.disable){ bits.push(`<span class="blk">⛔ ${glyph(e.disable)}</span>`); }
+      CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
+      shakeBoard();
+      await sleep(900);
     }
   }
-  await sleep(500);
+  await sleep(450);
   finish();
 }
 
@@ -1273,7 +1267,9 @@ function showcaseCard(id, ownerSlot){
   const you = ownerSlot === myslot;
   const skinId = you ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default");
   const bg = (SKINS[skinId] || SKINS.default).bg;
-  showcaseEl.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${you ? "YOUR ATTACK" : esc(foeName).toUpperCase() + "'S ATTACK"}</div>${bigCardHTML(id)}`;
+  const k = CARDS[id].kind, act = k === "attack" ? "ATTACK" : k === "shield" ? "DEFENSE" : "TRAP";
+  const who = you ? "YOUR" : esc(foeName).toUpperCase() + "'S";
+  showcaseEl.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${who} ${act}</div>${bigCardHTML(id)}`;
   const card = showcaseEl.querySelector(".bigcard");
   if (card) card.style.setProperty("--cardbg", bg); // the art panel takes the owner's skin colour
   clearTimeout(showcaseTimer);
