@@ -122,6 +122,7 @@
   .manaicon{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.22em;image-rendering:pixelated;display:inline-block}
   .avicon{width:1.3em;height:1.3em;object-fit:contain;vertical-align:-0.28em;image-rendering:pixelated;display:inline-block}
   .tierbadge{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.2em;image-rendering:pixelated;display:inline-block}
+  .uiart{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
   #undo{padding:6px 10px;font-size:12px;border-color:var(--amber);color:var(--amber);background:var(--panel)}
@@ -527,8 +528,21 @@ const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
 const glyph = (id) => `<img class="elglyph" src="img/${id}.png" alt="${id}" data-e="${EMO(id)}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
 // the mana symbol — a pixel-art orb at img/mana.png, falling back to ⚡ until the art is dropped in
 const manaIcon = () => `<img class="manaicon" src="img/mana.png" alt="mana" data-e="⚡" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
-// turn base-element emojis (and the ⚡ mana symbol) inside a text string into their pixel-art icons
-const infoHtml = (s) => String(s).replace(/🔥|💧|🌍|💨|⚡/gu, (m) => m === "⚡" ? manaIcon() : glyph(Object.keys(BASE).find((k) => BASE[k] === m)));
+// generic drop-in art: try a PNG, fall back to the emoji (as a text node). Add art by dropping the file in.
+const artOr = (src, emoji, cls) => `<img class="${cls}" src="${src}" alt="" data-e="${emoji}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
+// every UI / effect / result emoji → an art id at img/ui-<id>.png (falls back to the emoji until added)
+const UIART = {
+  "🛡️":"shield","💥":"damage","💚":"heal","⚔️":"swords","🪤":"trap","✨":"spark","➡️":"arrow","♻️":"recycle","🔒":"lock","✋":"hand","🎯":"target","⛔":"ban",
+  "🏆":"trophy","☠️":"defeat","⚖️":"draw",
+  "🪙":"coins","🎨":"skins","🖼️":"icons","🎖️":"titles","🔤":"namecolor","📖":"book","📜":"scroll","❔":"help","🤖":"bot","🏳":"flag","🔎":"search","↩":"undo","⏱":"clock","⚙️":"gear","⚠":"warn","🧹":"broom","🛠️":"tools","🛠":"tools","✏️":"pencil",
+};
+const ui = (e) => UIART[e] ? artOr(`img/ui-${UIART[e]}.png`, e, "uiart") : e; // a single UI emoji → art-or-emoji
+// combined matcher: base elements, the mana orb, and every UI/effect emoji (longest first so 🛠️ beats 🛠)
+const ART_RE = new RegExp([...Object.keys(UIART), "🔥","💧","🌍","💨","⚡"].sort((a,b)=>b.length-a.length).map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"), "gu");
+// turn every mapped emoji inside a text string into its pixel-art icon (elements, mana, UI/effects)
+const artText = (s) => String(s).replace(ART_RE, (m) => m === "⚡" ? manaIcon() : BASE_BY_EMOJI[m] ? glyph(BASE_BY_EMOJI[m]) : ui(m));
+const BASE_BY_EMOJI = Object.fromEntries(Object.entries(BASE).map(([k, v]) => [v, k]));
+const infoHtml = artText; // alias kept for existing call sites
 
 // ---- lobby / connection ----
 const $ = (id) => document.getElementById(id);
@@ -731,8 +745,6 @@ const ICONS = {
   archmage:{ name:"Archmage", price:25, em:"🧙" },
 };
 const iconEm = (id) => (ICONS[id] || ICONS.default).em;
-// drop-in art: try a PNG, fall back to the emoji. Manage purely by adding named files to public/img/.
-const artOr = (src, emoji, cls) => `<img class="${cls}" src="${src}" alt="" data-e="${emoji}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
 const iconGlyph = (id) => artOr(`img/icon-${id}.png`, iconEm(id), "avicon");   // profile avatar
 const tierGlyph = (t)  => artOr(`img/tier-${t.id}.png`, t.em, "tierbadge");    // rank badge
 // name colours (rainbow is an animated gradient handled via a CSS class)
@@ -778,7 +790,7 @@ function refreshProfileBox(){
   $("pname").innerHTML = `${iconGlyph(profile.icon)} ${esc(profile.name)}`; applyNameColor($("pname"), profile.nameColor, t.color);
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
   $("precord").innerHTML = `${tierGlyph(t)} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
-  $("pcoins").textContent = `🪙 ${profile.coins || 0}`;
+  $("pcoins").innerHTML = `${ui("🪙")} ${profile.coins || 0}`;
   $("admin").hidden = !profile.dev; // dev-only profile tools
 }
 $("signout").onclick = () => {
@@ -794,9 +806,9 @@ $("signout").onclick = () => {
 // ---- message handling ----
 function handle(m){
   if (m.type === "full")    return $("status").textContent = "That room is full.";
-  if (m.type === "searching") $("status").textContent = "🔎 Searching for an opponent…";
+  if (m.type === "searching") $("status").innerHTML = artText("🔎 Searching for an opponent…");
   if (m.type === "joined")  { myslot = m.slot; if (quick) $("roomtag").textContent = "Matched"; else showInvite(m.code); }
-  if (m.type === "waiting") $("status").textContent = quick ? "🔎 Searching for an opponent…" : "Waiting for your friend to join…";
+  if (m.type === "waiting") $("status").innerHTML = quick ? artText("🔎 Searching for an opponent…") : "Waiting for your friend to join…";
   if (m.type === "left")    { $("forfeit").hidden = true; $("overtitle").textContent = "Opponent left"; $("oversub").textContent=""; $("over").style.display="flex"; }
   if (m.type === "start")   { $("over").style.display = "none"; inv = {}; enterArena(); newRound(m); }
   if (m.type === "round")   { if (animating) pendingRound = m; else newRound(m); }
@@ -810,21 +822,21 @@ function showOver(m){
   $("forfeit").hidden = true;
   const meName = profile ? profile.name : "";
   const draw = m.winner === null, won = m.winner === meName;
-  $("overtitle").textContent = draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated";
-  $("oversub").textContent = draw ? "You both fell in the same round."
+  $("overtitle").innerHTML = artText(draw ? "⚖️ Draw" : won ? "🏆 Victory" : "☠️ Defeated");
+  $("oversub").innerHTML = draw ? "You both fell in the same round."
     : won ? (m.forfeit ? "Your opponent forfeited." : "You crushed them.")
-    : (m.forfeit ? "You forfeited." : m.winner + " won.");
+    : (m.forfeit ? "You forfeited." : esc(m.winner) + " won.");
   $("over").style.display = "flex";
   if (profile && m.newRatings && m.newRatings[profile.id]){ // authoritative ranked result from the server
     const nr = m.newRatings[profile.id];
     profile.rating = nr.rating;
     if (won) profile.wins = (profile.wins||0)+1; else if (!draw) profile.losses = (profile.losses||0)+1;
-    $("oversub").textContent += `  (${nr.delta >= 0 ? "+" : ""}${nr.delta} → ${nr.rating})`;
+    $("oversub").innerHTML += `  (${nr.delta >= 0 ? "+" : ""}${nr.delta} → ${nr.rating})`;
     refreshProfileBox();
   }
   if (profile && m.coins && m.coins.id === profile.id){ // coins earned for the win (server-authoritative)
     profile.coins = m.coins.total;
-    $("oversub").textContent += `  · 🪙 +${m.coins.amount}`;
+    $("oversub").innerHTML += `  · ${ui("🪙")} +${m.coins.amount}`;
     refreshProfileBox();
   }
   syncProgress(); // save discovered recipes to the DB and refresh from the authoritative profile
@@ -907,7 +919,7 @@ function updateUI(){
   $("roundmsg").innerHTML = locked ? "Waiting for opponent…"
     : `Round ${round}${manaCarried > 0 ? ` · <span style="color:var(--shield)">${manaIcon()}${manaCarried} banked</span>` : ""}${manaBonus > 0 ? ` · <span style="color:var(--amber)">${manaIcon()}${manaBonus} charged</span>` : ""}`;
   $("apdots").innerHTML = [...Array(apBudget)].map((_,i)=>`<span class="${i<apLeft()?"on":""}${i>=manaBase?" bank":""}"></span>`).join("");
-  $("ready").textContent = locked ? "↩ Un-ready" : "Ready";
+  $("ready").innerHTML = locked ? `${ui("↩")} Un-ready` : "Ready";
   $("ready").disabled = tutorialMode && locked; // in a live match you can always retract; tutorial locks are scripted
   $("undo").hidden = locked || !craftLog.length; // undo the last combine while still planning
   $("craft").classList.toggle("off", !canAct());
@@ -1117,7 +1129,7 @@ function renderFoeField(){
     f.innerHTML = `<span class="fieldempty">${foeLocked ? `✋ ${foeName} — nothing new set` : `🂠 ${foeName} is planning…`}</span>`;
     return;
   }
-  f.innerHTML = `<span class="foelabel">${foeLocked ? `🔒 ${foeName} locked in` : `🂠 ${foeName}'s board`}</span>` + all.map(back).join("");
+  f.innerHTML = `<span class="foelabel">${artText(foeLocked ? `🔒 ${foeName} locked in` : `🂠 ${foeName}'s board`)}</span>` + all.map(back).join("");
 }
 // tell the opponent our live card count whenever we play or cancel one (backs only — never which cards)
 function sendFieldCount(){ if (!tutorialMode && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "field", kinds: plan.map(d => d.k) })); }
@@ -1160,7 +1172,7 @@ function startTimer(seconds){
 function renderTimer(){
   const t = $("timer");
   if (locked || secsLeft < 0){ t.textContent = ""; return; }
-  t.textContent = `⏱ 0:${String(Math.max(0, secsLeft)).padStart(2, "0")}`;
+  t.innerHTML = `${ui("⏱")} 0:${String(Math.max(0, secsLeft)).padStart(2, "0")}`;
   t.style.color = secsLeft <= 5 ? "var(--foe)" : "var(--soft)";
 }
 
@@ -1176,7 +1188,7 @@ function revHp(slot, val){ // update a badge's HP number + bar during the reveal
   const num = document.getElementById(you ? "myhp" : "foehp"); if (num) num.textContent = val;
   const bar = document.getElementById(you ? "mybar" : "foebar"); if (bar) bar.style.width = (val / 30 * 100) + "%";
 }
-const CLASH = (html) => { $("clash").innerHTML = `<span id="clashmsg">${html}</span>`; };
+const CLASH = (html) => { $("clash").innerHTML = `<span id="clashmsg">${artText(html)}</span>`; };
 // the reveal now plays out ON the board: the set cards flip up in place, then each effect resolves with HP hits + shakes
 async function startReveal(m){
   const events = m.events || [];
@@ -1261,7 +1273,7 @@ function cardStats(id){
     if (t.heal) s.push(`<span class="st heal">💚 ${t.heal}</span>`);
     if (t.mana) s.push(`<span class="st">${manaIcon()} +${t.mana}</span>`);
   }
-  return s.join("");
+  return artText(s.join("")); // convert ⚔️ 🛡️ 💚 💥 into drop-in art
 }
 function bigCardHTML(id){
   const c = CARDS[id]; if (!c) return "";
@@ -1383,7 +1395,7 @@ function buildNode(id){
 }
 function cardEffects(id){
   const c = CARDS[id], rows = [];
-  const E = (k, txt) => rows.push(`<div class="ieff"><span class="k">${k}</span> <span>${txt}</span></div>`);
+  const E = (k, txt) => rows.push(`<div class="ieff"><span class="k">${artText(k)}</span> <span>${artText(txt)}</span></div>`);
   if (c.kind === "attack"){
     E("💥", `Deals <b>${c.dmg}</b> damage`);
     const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${glyph(c.counter)} ${cc.name}</b>`);
@@ -1426,7 +1438,7 @@ $("sheet").onclick = (e) => { if (e.target === $("sheet")) $("sheet").hidden = t
 
 // ---- arena leaderboard (reuses the sheet overlay) ----
 function openLeaderboard(){
-  $("sheettitle").textContent = "🏆 Arena Leaderboard";
+  $("sheettitle").innerHTML = artText("🏆 Arena Leaderboard");
   $("sheetbody").innerHTML = `<p class="sheetnote">Loading…</p>`;
   $("sheet").hidden = false;
   fetch("/leaderboard").then((r) => r.json()).then((d) => {
@@ -1485,7 +1497,7 @@ const PATCH_NOTES = [
   ]},
 ];
 function openPatch(){
-  $("sheettitle").textContent = "📜 Patch Notes";
+  $("sheettitle").innerHTML = artText("📜 Patch Notes");
   const tagColor = { New:"var(--accent)", Change:"var(--shield)", Buff:"var(--you)", Nerf:"var(--foe)", Remove:"var(--foe)", Fix:"var(--amber)" };
   $("sheetbody").innerHTML = PATCH_NOTES.map((p) =>
     `<div class="patch"><div class="patchhead"><span class="pv">Patch ${p.v}</span> · ${p.title} <span class="s" style="color:var(--soft);font-family:var(--body);font-size:12px">${p.date}</span></div>` +
@@ -1498,7 +1510,7 @@ $("patch").onclick = openPatch;
 // ---- cosmetics: equip a title unlocked by your peak tier (reuses the sheet overlay) ----
 function openCosmetics(){
   if (!profile) return;
-  $("sheettitle").textContent = "🎖️ Titles";
+  $("sheettitle").innerHTML = artText("🎖️ Titles");
   const peakIdx = tierIdx(tierOf(profile.peak || profile.rating || 1000).id);
   let rows = `<div class="crow"${profile.title ? "" : ' style="background:var(--panel2)"'}>` +
     `<span class="a" style="color:var(--ink)">— No title —</span>` +
@@ -1533,17 +1545,17 @@ $("cosmetics").onclick = openCosmetics;
 // ---- card-skin shop: spend coins on cosmetic card backgrounds (reuses the sheet overlay) ----
 function openShop(){
   if (!profile) return;
-  $("sheettitle").textContent = "🎨 Card Skins";
+  $("sheettitle").innerHTML = artText("🎨 Card Skins");
   const owned = new Set(profile.skins || ["default"]);
   const eqp = profile.cardSkin || "default";
-  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on card colours — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on card colours — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">${ui("🪙")} ${profile.coins||0}</b>.</p>`;
   for (const [id, s] of Object.entries(SKINS)){
     const isOwned = id === "default" || owned.has(id);
     const isEq = eqp === id;
     const swatch = `<span style="display:inline-block;width:22px;height:28px;border-radius:6px;border:1px solid var(--line);background:${s.bg}"></span>`;
     const ctrl = isEq ? `<button disabled>Equipped</button>`
       : isOwned ? `<button data-skin="${id}" data-act="equip">Equip</button>`
-      : `<button data-skin="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+      : `<button data-skin="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>${ui("🪙")} ${s.price}</button>`;
     rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}>${swatch}` +
       `<span class="a" style="color:var(--ink);flex:1;margin-left:8px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
   }
@@ -1553,17 +1565,17 @@ function openShop(){
 }
 function openIconShop(){
   if (!profile) return;
-  $("sheettitle").textContent = "🖼️ Profile Icons";
+  $("sheettitle").innerHTML = artText("🖼️ Profile Icons");
   const owned = new Set(profile.icons || ["default"]);
   const eqp = profile.icon || "default";
-  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on a profile icon — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  let rows = `<p class="sheetnote" style="margin-top:0">Spend coins on a profile icon — cosmetic only, no gameplay effect. You have <b style="color:var(--amber)">${ui("🪙")} ${profile.coins||0}</b>.</p>`;
   for (const [id, s] of Object.entries(ICONS)){
     const isOwned = id === "default" || owned.has(id);
     const isEq = eqp === id;
     const av = `<span style="font-size:26px;width:34px;text-align:center;flex-shrink:0">${iconGlyph(id)}</span>`;
     const ctrl = isEq ? `<button disabled>Equipped</button>`
       : isOwned ? `<button data-icon="${id}" data-act="equip">Equip</button>`
-      : `<button data-icon="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+      : `<button data-icon="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>${ui("🪙")} ${s.price}</button>`;
     rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}>${av}` +
       `<span class="a" style="color:var(--ink);flex:1;margin-left:6px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
   }
@@ -1573,17 +1585,17 @@ function openIconShop(){
 }
 function openColorShop(){
   if (!profile) return;
-  $("sheettitle").textContent = "🎨 Name Colors";
+  $("sheettitle").innerHTML = artText("🎨 Name Colors");
   const owned = new Set(profile.nameColors || ["default"]);
   const eqp = profile.nameColor || "default";
-  let rows = `<p class="sheetnote" style="margin-top:0">Recolour your name — cosmetic only. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  let rows = `<p class="sheetnote" style="margin-top:0">Recolour your name — cosmetic only. You have <b style="color:var(--amber)">${ui("🪙")} ${profile.coins||0}</b>.</p>`;
   for (const [id, s] of Object.entries(NAME_COLORS)){
     const isOwned = id === "default" || owned.has(id), isEq = eqp === id;
     const sample = s.color === "rainbow" ? `<span class="rainbow-text" style="font-weight:700">Name</span>`
       : `<span style="color:${s.color || 'var(--ink)'};font-weight:700">Name</span>`;
     const ctrl = isEq ? `<button disabled>Equipped</button>`
       : isOwned ? `<button data-item="${id}" data-act="equip">Equip</button>`
-      : `<button data-item="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+      : `<button data-item="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>${ui("🪙")} ${s.price}</button>`;
     rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}><span style="width:56px;text-align:center;flex-shrink:0">${sample}</span>` +
       `<span class="a" style="color:var(--soft);flex:1;margin-left:8px">${s.name}${isOwned && id!=="default" ? ' · owned' : ""}</span>${ctrl}</div>`;
   }
@@ -1593,16 +1605,16 @@ function openColorShop(){
 }
 function openBackShop(){
   if (!profile) return;
-  $("sheettitle").textContent = "🂠 Card Backs";
+  $("sheettitle").innerHTML = artText("🂠 Card Backs");
   const owned = new Set(profile.cardBacks || ["default"]);
   const eqp = profile.cardBack || "default";
-  let rows = `<p class="sheetnote" style="margin-top:0">An animated face-down back your opponent sees when you play cards. Cosmetic only. You have <b style="color:var(--amber)">🪙 ${profile.coins||0}</b>.</p>`;
+  let rows = `<p class="sheetnote" style="margin-top:0">An animated face-down back your opponent sees when you play cards. Cosmetic only. You have <b style="color:var(--amber)">${ui("🪙")} ${profile.coins||0}</b>.</p>`;
   for (const [id, s] of Object.entries(CARD_BACKS)){
     const isOwned = id === "default" || owned.has(id), isEq = eqp === id;
     const prev = `<div class="cardback ${id !== "default" ? id : ""}" style="width:30px;height:42px;flex-shrink:0;font-size:14px">?</div>`;
     const ctrl = isEq ? `<button disabled>Equipped</button>`
       : isOwned ? `<button data-item="${id}" data-act="equip">Equip</button>`
-      : `<button data-item="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>🪙 ${s.price}</button>`;
+      : `<button data-item="${id}" data-act="buy" ${(profile.coins||0) < s.price ? "disabled" : ""}>${ui("🪙")} ${s.price}</button>`;
     rows += `<div class="crow"${isEq ? ' style="background:var(--panel2)"' : ""}>${prev}` +
       `<span class="a" style="color:var(--ink);flex:1;margin-left:10px">${s.name}${isOwned && id!=="default" ? ' <span class="s" style="color:var(--soft)">· owned</span>' : ""}</span>${ctrl}</div>`;
   }
@@ -1629,7 +1641,7 @@ function openRename(){
   if (!profile) return;
   renameMode = true;
   $("nmtitle").textContent = "Change your name";
-  $("nmsub").innerHTML = `Costs <b style="color:var(--amber)">🪙 20</b>. Names are unique.`;
+  $("nmsub").innerHTML = `Costs <b style="color:var(--amber)">${ui("🪙")} 20</b>. Names are unique.`;
   $("pnamesave").textContent = "Change name (🪙 20)";
   $("pnameinput").value = profile.name || "";
   $("pnameerr").textContent = ""; $("pnamesave").disabled = false;
@@ -1654,14 +1666,14 @@ function adminCall(action, extra){
 }
 function openAdmin(){
   if (!profile || !profile.dev) return;
-  $("sheettitle").textContent = "🛠 Profiles (dev)";
+  $("sheettitle").innerHTML = artText("🛠 Profiles (dev)");
   $("sheetbody").innerHTML = `<p class="sheetnote" style="margin-top:0">Loading…</p>`;
   $("sheet").hidden = false;
   adminCall("list").then((d) => {
     if (!d || d.error){ $("sheetbody").innerHTML = `<p class="sheetnote">${esc(d && d.error || "Failed to load.")}</p>`; return; }
     const rows = (d.profiles || []).sort((a,b)=>(b.rating||0)-(a.rating||0)).map((p) =>
       `<div class="crow"><span class="a" style="color:var(--ink);flex:1">${esc(p.name || "(no name)")} ` +
-      `<span class="s" style="color:var(--soft);font-weight:400">${p.rating} · ${p.wins}W/${p.losses}L · 🪙${p.coins}</span></span>` +
+      `<span class="s" style="color:var(--soft);font-weight:400">${p.rating} · ${p.wins}W/${p.losses}L · ${ui("🪙")}${p.coins}</span></span>` +
       `<button data-edit="${esc(p.id)}">Edit</button></div>`).join("");
     $("sheetbody").innerHTML =
       `<p class="sheetnote" style="margin-top:0">Storage: <b>${esc(d.storage)}</b> · ${(d.profiles||[]).length} profiles. Editing re-saves as a clean single-line string.</p>` +
@@ -1781,6 +1793,12 @@ $("coachnext").onclick = () => { const g = GUIDE[guideStep]; if (g.last) endTuto
 $("coachskip").onclick = endTutorial;
 $("howto").onclick = startTutorial;
 // (first-time tutorial is triggered after login via maybeStartTutorial, not on page load)
+
+// paint the emoji on the static menu / header buttons into drop-in art (falls back to the emoji)
+(function paintStaticEmojis(){
+  ["quick","bot","cosmetics","shop","icons","namecolor","rename","admin","lb","book","howto","patch","guide","forfeit","undo"]
+    .forEach((id) => { const el = $(id); if (el) el.innerHTML = artText(el.innerHTML); });
+})();
 </script>
 </body>
 </html>

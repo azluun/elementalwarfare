@@ -99,37 +99,36 @@ Mana also shows the ⚡→orb everywhere (`img/mana.png`, done).
 ### Rank tiers — Hookable (`img/tier-<id>.png`)
 🪵 wood · 🥉 bronze · 🥈 silver · 🏅 gold · 💠 platinum · 💎 diamond · 👑 champion
 
-### Combat / effect icons — Not hooked
-| emoji | meaning | emoji | meaning |
-|---|---|---|---|
-| 🛡️ | block / shield | ✨ | (spare fx) |
-| 💥 | damage | ➡️ | "crafts into" |
-| 💚 | heal | ♻️ | pure recovery |
-| ⚔️ | the field / find match | 🎯 | practice dummy |
-| 🪤 | trap | ✋ | locked in, no cards |
-| ⛔ | (legacy disable icon) | 🔒 | opponent locked in |
+All three groups below are now **Hookable** — every one has a slot at `img/ui-<id>.png` and
+falls back to its emoji until you add the file. Drop the final PNG straight into `public/img/`
+(these are UI icons, not subject-on-background, so **don't** run them through `artgen`). ~64–128px.
 
-### Result banners — Not hooked
-🏆 Victory · ☠️ Defeated · ⚖️ Draw
+### Combat / effect icons — `img/ui-<id>.png`
+| emoji | id | | emoji | id |
+|---|---|---|---|---|
+| 🛡️ | `ui-shield` | | ✨ | `ui-spark` |
+| 💥 | `ui-damage` | | ➡️ | `ui-arrow` |
+| 💚 | `ui-heal` | | ♻️ | `ui-recycle` |
+| ⚔️ | `ui-swords` | | 🎯 | `ui-target` |
+| 🪤 | `ui-trap` | | ✋ | `ui-hand` |
+| ⛔ | `ui-ban` | | 🔒 | `ui-lock` |
 
-### Menu & UI buttons — Not hooked
-| emoji | where | emoji | where |
-|---|---|---|---|
-| 🪙 | coins | ✏️ | Rename |
-| 🎨 | Skins | 🏳 | Forfeit |
-| 🖼️ | Icons | 🤖 | Play vs Bot |
-| 🎖️ | Titles | ❔ | How to play |
-| 🔤 | Name Color | 🔎 | searching… |
-| 📖 | Guide | ↩ | Undo / Un-ready |
-| 📜 | Patch Notes | ⏱ | round timer |
-| 🏆 | Leaderboard | ⚙️ | Elemental Bot |
-| 🛠 / 🛠️ | Dev tools | 🧹 | Normalize (dev) |
-| ⚠ | warnings | | |
+### Result banners — `img/ui-<id>.png`
+🏆 `ui-trophy` (also Leaderboard) · ☠️ `ui-defeat` · ⚖️ `ui-draw`
 
-### Changelog / decorative (inside Patch Notes text — low value)
-🌀 · 🔷 · 🃏 · 📱 · 👋
+### Menu & UI buttons — `img/ui-<id>.png`
+| emoji | id | | emoji | id |
+|---|---|---|---|---|
+| 🪙 | `ui-coins` | | 🏳 | `ui-flag` (Forfeit) |
+| 🎨 | `ui-skins` | | 🤖 | `ui-bot` |
+| 🖼️ | `ui-icons` | | ❔ | `ui-help` |
+| 🎖️ | `ui-titles` | | 🔎 | `ui-search` |
+| 🔤 | `ui-namecolor` | | ↩ | `ui-undo` |
+| 📖 | `ui-book` (Guide/Recipes) | | ⏱ | `ui-clock` |
+| 📜 | `ui-scroll` (Patch Notes) | | ⚙️ | `ui-gear` (bot) |
+| 🏆 | `ui-trophy` | | 🧹 | `ui-broom` (dev) |
+| 🛠 / 🛠️ | `ui-tools` (dev) | | ✏️ | `ui-pencil` (Rename) |
+| ⚠ | `ui-warn` | | | |
 
----
-
-*Want me to wire up any group above (combat icons, result banners, menu buttons) to the drop-in
-art system so you can replace them with PNGs? Just name the group.*
+### Changelog / decorative (inside Patch Notes text — not hooked, low value)
+🌀 · 🔷 · 🃏 · 📱 · 👋 — plain emoji in historical changelog entries; ask if you want them too.
