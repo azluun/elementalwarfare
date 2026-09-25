@@ -68,19 +68,13 @@ Shown next to ratings everywhere. Small (128px).
 - [ ] tier-wood · [ ] tier-bronze · [ ] tier-silver · [ ] tier-gold
 - [ ] tier-platinum · [ ] tier-diamond · [ ] tier-champion
 
-### 3. Card border / frame art — attack/defense/trap done · **2 new types needed**
+### 3. Card border / frame art — ✅ DONE (all 5 types)
 Ornate per-type frames (172×230, transparent centre) overlay every big card.
-Done: `frame-attack.png` · `frame-shield.png` · `frame-trap.png`
-- [ ] `frame-spell.png` — 🟡 yellow, to match the Spell type
-- [ ] `frame-landscape.png` — 🟣 purple, to match the Landscape type
+`frame-attack.png` · `frame-shield.png` · `frame-trap.png` · `frame-spell.png` · `frame-landscape.png`
 
-### 4. Card background art — attack/defense/trap done · **2 new types needed**
+### 4. Card background art — ✅ DONE (all 5 types)
 Per-type textures behind the card content (~70% opacity).
-Done: `cardbg-attack.png` · `cardbg-shield.png` · `cardbg-trap.png`
-- [ ] `cardbg-spell.png` — a soft yellow/parchment texture
-- [ ] `cardbg-landscape.png` — a soft purple/terrain texture
-
-> The code hooks for both are already wired — drop the PNGs into `public/img/` and they appear.
+`cardbg-attack.png` · `cardbg-shield.png` · `cardbg-trap.png` · `cardbg-spell.png` · `cardbg-landscape.png`
 
 ---
 

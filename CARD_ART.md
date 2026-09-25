@@ -21,8 +21,10 @@ texture behind the content (`cardbg-<type>.png`, 172×230, shown ~70% opacity).
 | Attack | 🔴 red | `frame-attack.png` | `cardbg-attack.png` | ✅ done |
 | Defense | 🔵 blue | `frame-shield.png` | `cardbg-shield.png` | ✅ done |
 | Trap | 🟢 green | `frame-trap.png` | `cardbg-trap.png` | ✅ done |
-| Spell | 🟡 yellow | `frame-spell.png` | `cardbg-spell.png` | ⬜ needed |
-| Landscape | 🟣 purple | `frame-landscape.png` | `cardbg-landscape.png` | ⬜ needed |
+| Spell | 🟡 yellow | `frame-spell.png` | `cardbg-spell.png` | ✅ done |
+| Landscape | 🟣 purple | `frame-landscape.png` | `cardbg-landscape.png` | ✅ done |
+
+**All five frame/background sets are done.** What's left is per-card subject art below.
 
 ---
 
