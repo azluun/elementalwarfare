@@ -60,7 +60,7 @@
   .board.droptarget{outline:2px dashed var(--accent);outline-offset:-3px}
   .board.hitshake{animation:shake .32s}
   /* ===== Landscape terrain: theme the whole board when a landscape is in play ===== */
-  .board{transition:outline .12s,border-color .5s,box-shadow .5s,background .5s}
+  .board{transition:outline .12s,border-color .5s,box-shadow .5s,background .5s;isolation:isolate} /* own stacking context so the terrain frame can sit behind the content */
   /* immediate colour theme (works with no art): tinted border, glow, and ambient wash per element */
   .board[data-terrain]{border-width:2px;border-style:solid}
   .board[data-terrain="fire"]{border-color:#e2564f;box-shadow:0 0 26px -6px rgba(226,86,79,.55),inset 0 0 90px -40px rgba(226,86,79,.7);
@@ -73,7 +73,7 @@
     background:radial-gradient(120% 82% at 50% 0%,rgba(159,185,201,.14),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(159,185,201,.09),transparent 62%),var(--panel)}
   /* drop-in ORNATE FRAME art per element — add public/img/field-<element>.png (9-slice, transparent centre).
      Invisible until the file exists; the colour theme above always shows. */
-  .board[data-terrain]::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+  .board[data-terrain]::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1; /* behind the badges, cards and text; above the board's ambient glow */
     border:solid transparent;border-width:26px;border-image-slice:26;border-image-repeat:round;image-rendering:pixelated}
   .board[data-terrain="fire"]::after {border-image-source:url(img/field-fire.png)}
   .board[data-terrain="water"]::after{border-image-source:url(img/field-water.png)}
