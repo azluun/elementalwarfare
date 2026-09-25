@@ -282,7 +282,17 @@
   .sheethead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;position:sticky;top:-16px;background:var(--panel);padding-top:2px}
   .sheethead b{font-family:var(--dsp);font-size:18px}
   .sheethead button{background:var(--panel2);padding:4px 10px}
+  .sheethead #sheetback{color:var(--accent);border-color:var(--accent)}
   .sheet h3{font-family:var(--dsp);font-size:13px;color:var(--soft);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+  /* recipe book — a binder of card tiles */
+  .bookgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin:6px 0 10px}
+  .booktile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 6px;border-radius:12px;border:1px solid var(--line);background:var(--cardbg);cursor:pointer;text-align:center;transition:transform .12s,border-color .12s}
+  .booktile:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .booktile .bt-art{font-size:34px;line-height:1}
+  .booktile .bt-nm{font-size:10.5px;font-weight:700;line-height:1.1}
+  .booktile.attack{border-color:var(--foe)} .booktile.shield{border-color:var(--shield)} .booktile.trap{border-color:var(--trap)}
+  .bookcardwrap{display:flex;justify-content:center;margin:10px 0 40px}
+  .bookcardwrap .bigcard{transform:scale(1.15);transform-origin:top center}
   .crow{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}
   .crow .a{color:var(--foe);font-weight:600;flex:1} .crow .s{color:var(--shield);font-weight:600}
   .crow .arrow{color:var(--soft)}
@@ -385,7 +395,6 @@
     <div style="display:flex;align-items:center;gap:8px">
       <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
       <button id="forfeit" hidden style="padding:5px 10px;font-size:12px;border-color:var(--foe);color:var(--foe)">🏳 Forfeit</button>
-      <button id="guide" style="padding:5px 10px;font-size:12px">📖 Guide</button>
       <button id="profilechip" hidden title="Profile & settings">
         <span class="pc-ava" id="chipava"></span>
         <span class="pc-txt"><span class="pc-name" id="chipname"></span><span class="pc-rank" id="chiprank"></span></span>
@@ -469,7 +478,7 @@
 
 <div class="sheet" id="sheet" hidden>
   <div class="sheetbox">
-    <div class="sheethead"><b id="sheettitle">Recipes</b><button id="sheetclose">✕</button></div>
+    <div class="sheethead"><button id="sheetback" hidden>‹ Back</button><b id="sheettitle">Recipes</b><button id="sheetclose">✕</button></div>
     <div id="sheetbody"></div>
   </div>
 </div>
@@ -1367,88 +1376,50 @@ if (HOVER){
   });
 }
 document.addEventListener("pointerdown", hidePreview, true); // never leave a preview stuck when an interaction begins
-function renderSheet(mode){
-  const known = mode === "known";
-  const total = Object.keys(CARDS).length;
-  $("sheettitle").textContent = known ? `Your recipes · ${discovered.size}/${total}` : "Recipe Book — everything";
-
-  const attacks = Object.entries(CARDS).filter(([id, c]) => c.kind === "attack");
-  const counterRows = attacks.filter(([id]) => !known || discovered.has(id)).map(([id, c]) => {
-    const s = CARDS[c.counter];
-    const blk = (!known || discovered.has(c.counter)) ? `${glyph(c.counter)} ${s.name}` : "🔒 ???";
-    return `<div class="crow click" data-card="${id}"><span class="a">${glyph(id)} ${c.name}</span><span>${c.dmg} dmg</span><span class="arrow">→</span><span class="s">${blk}</span></div>`;
-  }).join("");
-
-  const recipeRows = Object.keys(CARDS).filter((id) => !known || discovered.has(id))
-    .map((id) => `<div class="rrow click" data-card="${id}">${glyph(id)} <b>${CARDS[id].name}</b> <span class="r">= ${ingredients(CARDS[id])}</span></div>`).join("");
-
-  const foot = known
-    ? (discovered.size === 0
-        ? `<p class="sheetnote">You haven't crafted anything yet — combine elements in a match and recipes appear here.</p>`
-        : `<p class="sheetnote">🔒 ${total - discovered.size} of ${total} recipes still undiscovered — craft them to reveal them.</p>`)
-    : `<p class="sheetnote">Bases ${["fire","water","earth","air"].map(glyph).join("")} are free. Everything else = two things you own. Craft = 1 AP, stage a card = 1 AP.</p>`;
-
-  $("sheetbody").innerHTML =
-    `<p class="sheetnote" style="margin-top:0">Tap any card to inspect its build tree and effects.</p>` +
-    `<h3>Attacks — damage · counter</h3>${counterRows || `<p class="sheetnote">No attacks discovered yet.</p>`}` +
-    `<h3>Recipes</h3>${recipeRows}${foot}`;
-  $("sheetbody").querySelectorAll("[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card));
+// a header "‹ Back" that routes to the previous panel (profile, or the recipe-book grid)
+let onSheetBack = null;
+function setSheetBack(fn){ onSheetBack = fn || null; $("sheetback").hidden = !onSheetBack; }
+$("sheetback").onclick = () => { const f = onSheetBack; if (f) f(); };
+// the Recipe Book — a card binder: tiles you tap to see the full card (which carries all the info)
+function renderSheet(){
+  $("sheettitle").innerHTML = artText("📖 Recipe Book");
+  const tile = (id) => { const c = CARDS[id];
+    return `<div class="booktile ${c.kind}" data-card="${id}"><span class="bt-art">${glyph(id)}</span><span class="bt-nm">${c.name}</span></div>`; };
+  let html = `<p class="sheetnote" style="margin-top:0">Tap a card to see it full-size — art, stats and recipe are all on the card.</p>`;
+  for (const [label, kind] of [["Attacks","attack"],["Defenses","shield"],["Traps","trap"]]){
+    const ids = Object.keys(CARDS).filter((id) => CARDS[id].kind === kind);
+    html += `<h3>${label}</h3><div class="bookgrid">${ids.map(tile).join("")}</div>`;
+  }
+  html += `<p class="sheetnote">Bases ${["fire","water","earth","air"].map(glyph).join(" ")} are free. Everything else = two things you own. Craft = 1 ${manaIcon()}, play a card = 1 ${manaIcon()}.</p>`;
+  $("sheetbody").innerHTML = html;
+  $("sheetbody").querySelectorAll("[data-card]").forEach((el) => el.onclick = () => showBookCard(el.dataset.card));
+  setSheetBack(null);
 }
-let sheetMode = "all"; // which list the inspector's Back button returns to
-function openSheet(mode){ sheetMode = mode; renderSheet(mode); $("sheet").hidden = false; }
+function openSheet(){ renderSheet(); $("sheet").hidden = false; }
+// the full card, big, opened from the binder — plus its build tree; back returns to the binder
+function showBookCard(id){
+  if (!CARDS[id]) return;
+  $("sheettitle").innerHTML = artText(CARDS[id].name);
+  $("sheetbody").innerHTML =
+    `<div class="bookcardwrap">${bigCardHTML(id)}</div>` +
+    `<div class="isection">Build tree</div><div class="treewrap"><ul class="tree">${buildNode(id)}</ul></div>`;
+  $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => showBookCard(el.dataset.card));
+  setSheetBack(() => openSheet());
+}
 
-// ---- Clash-Royale-style card inspector: big card, effects, and a build tree down to base elements ----
+// the build tree: this card at the top, branching down to base elements
 function buildNode(id){
   if (BASE[id]) return `<li><div class="tnode base"><span class="tem">${glyph(id)}</span><span class="tnm">${CAP(id)}</span></div></li>`;
   const c = CARDS[id];
   const kids = (c.recipe || []).map(buildNode).join("");
   return `<li><div class="tnode ${c.kind}" data-card="${id}"><span class="tem">${glyph(id)}</span><span class="tnm">${c.name}</span></div>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
 }
-function cardEffects(id){
-  const c = CARDS[id], rows = [];
-  const E = (k, txt) => rows.push(`<div class="ieff"><span class="k">${artText(k)}</span> <span>${artText(txt)}</span></div>`);
-  if (c.kind === "attack"){
-    E("💥", `Deals <b>${c.dmg}</b> damage`);
-    const cc = CARDS[c.counter]; E("🛡️", `Blocked by <b>${glyph(c.counter)} ${cc.name}</b>`);
-  } else if (c.kind === "shield"){
-    if (c.blocks){ const a = CARDS[c.blocks]; E("🛡️", `Blocks <b>${glyph(c.blocks)} ${a.name}</b> — negates its damage`); }
-    if (c.heal) E("💚", `Heals <b>${c.heal}</b> HP`);
-    if (c.mana) E(manaIcon(), `Grants <b>+${c.mana}</b> mana next round`);
-    if (!c.blocks) E("♻️", `No block — pure recovery`);
-  } else if (c.kind === "trap"){
-    const tr = c.trap || {};
-    E("🪤", `Trap — stays set until it springs; one springs per incoming attack`);
-    if (tr.retaliate) E("💥", `Deals <b>${tr.retaliate}</b> damage back to the attacker`);
-    if (tr.heal) E("💚", `Heals you <b>${tr.heal}</b> HP`);
-    if (tr.mana) E(manaIcon(), `Charges <b>+${tr.mana}</b> mana next round`);
-    const usedIn = Object.entries(CARDS).filter(([k, cc]) => (cc.recipe || []).includes(id)).map(([k, cc]) => `${glyph(k)} ${cc.name}`);
-    if (usedIn.length) E("➡️", `Also crafts into: <b>${usedIn.join(", ")}</b>`);
-  }
-  return rows.join("");
-}
-function openCard(id, onBack){
-  const c = CARDS[id]; if (!c) return;
-  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Ingredient";
-  $("sheettitle").textContent = c.name;
-  $("sheetbody").innerHTML =
-    `<div class="inspect">` +
-      `<div class="icard ${c.kind}"><div class="iem">${glyph(id)}</div><div class="inm">${c.name}</div><div class="ikind">${kindName}</div></div>` +
-      `<div class="isection">Effects</div><div class="ieffects">${cardEffects(id)}</div>` +
-      `<div class="isection">Build tree</div><div class="treewrap"><ul class="tree">${buildNode(id)}</ul></div>` +
-      `<div class="ieff" style="align-self:stretch;justify-content:center;color:var(--soft)">Recipe: ${ingredients(c)} → ${glyph(id)} ${c.name}</div>` +
-    `</div>` +
-    `<div class="row" style="margin-top:12px"><button id="cardback">← Back</button></div>`;
-  $("sheetbody").querySelectorAll(".tnode[data-card]").forEach((el) => el.onclick = () => openCard(el.dataset.card, onBack)); // drill into sub-cards
-  $("cardback").onclick = onBack || (() => openSheet(sheetMode)); // from the hand: Back just closes; from the book: return to the list
-  $("sheet").hidden = false;
-}
-$("guide").onclick = () => openSheet("known");
-$("book").onclick  = () => openSheet("all");
-$("sheetclose").onclick = () => { $("sheet").hidden = true; };
-$("sheet").onclick = (e) => { if (e.target === $("sheet")) $("sheet").hidden = true; };
+$("book").onclick  = openSheet;
+$("sheetclose").onclick = () => { $("sheet").hidden = true; setSheetBack(null); };
+$("sheet").onclick = (e) => { if (e.target === $("sheet")){ $("sheet").hidden = true; setSheetBack(null); } };
 
 // ---- arena leaderboard (reuses the sheet overlay) ----
-function openLeaderboard(){
+function openLeaderboard(){ setSheetBack(null);
   $("sheettitle").innerHTML = artText("🏆 Arena Leaderboard");
   $("sheetbody").innerHTML = `<p class="sheetnote">Loading…</p>`;
   $("sheet").hidden = false;
@@ -1507,7 +1478,7 @@ const PATCH_NOTES = [
     ["New", "Matchmaking, friend rooms, an AI bot, and arena ranking with tiers."],
   ]},
 ];
-function openPatch(){
+function openPatch(){ setSheetBack(null);
   $("sheettitle").innerHTML = artText("📜 Patch Notes");
   const tagColor = { New:"var(--accent)", Change:"var(--shield)", Buff:"var(--you)", Nerf:"var(--foe)", Remove:"var(--foe)", Fix:"var(--amber)" };
   $("sheetbody").innerHTML = PATCH_NOTES.map((p) =>
@@ -1519,7 +1490,7 @@ function openPatch(){
 $("patch").onclick = openPatch;
 
 // ---- cosmetics: equip a title unlocked by your peak tier (reuses the sheet overlay) ----
-function openCosmetics(){
+function openCosmetics(){ setSheetBack(openSettings);
   if (!profile) return;
   $("sheettitle").innerHTML = artText("🎖️ Titles");
   const peakIdx = tierIdx(tierOf(profile.peak || profile.rating || 1000).id);
@@ -1553,7 +1524,7 @@ function equipTitle(title){
 }
 
 // ---- card-skin shop: spend coins on cosmetic card backgrounds (reuses the sheet overlay) ----
-function openShop(){
+function openShop(){ setSheetBack(openSettings);
   if (!profile) return;
   $("sheettitle").innerHTML = artText("🎨 Card Skins");
   const owned = new Set(profile.skins || ["default"]);
@@ -1573,7 +1544,7 @@ function openShop(){
   $("sheetbody").querySelectorAll("button[data-skin]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.skin, "skin"); });
   $("sheet").hidden = false;
 }
-function openIconShop(){
+function openIconShop(){ setSheetBack(openSettings);
   if (!profile) return;
   $("sheettitle").innerHTML = artText("🖼️ Profile Icons");
   const owned = new Set(profile.icons || ["default"]);
@@ -1593,7 +1564,7 @@ function openIconShop(){
   $("sheetbody").querySelectorAll("button[data-icon]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.icon, "icon"); });
   $("sheet").hidden = false;
 }
-function openColorShop(){
+function openColorShop(){ setSheetBack(openSettings);
   if (!profile) return;
   $("sheettitle").innerHTML = artText("🎨 Name Colors");
   const owned = new Set(profile.nameColors || ["default"]);
@@ -1613,7 +1584,7 @@ function openColorShop(){
   $("sheetbody").querySelectorAll("button[data-item]").forEach((b) => { b.onclick = () => shopAction(b.dataset.act, b.dataset.item, "color"); });
   $("sheet").hidden = false;
 }
-function openBackShop(){
+function openBackShop(){ setSheetBack(openSettings);
   if (!profile) return;
   $("sheettitle").innerHTML = artText("🂠 Card Backs");
   const owned = new Set(profile.cardBacks || ["default"]);
@@ -1669,7 +1640,7 @@ function adminCall(action, extra){
   return authFetch("/admin", Object.assign({ action }, extra || {}))
     .then((r) => r.json()).catch((e) => ({ error: e.message === "auth-required" ? "session expired — sign in again" : "network error" }));
 }
-function openAdmin(){
+function openAdmin(){ setSheetBack(openSettings);
   if (!profile || !profile.dev) return;
   $("sheettitle").innerHTML = artText("🛠 Profiles (dev)");
   $("sheetbody").innerHTML = `<p class="sheetnote" style="margin-top:0">Loading…</p>`;
@@ -1714,6 +1685,7 @@ let settingsOpen = false;
 function openSettings(){
   if (!profile) return;
   settingsOpen = true;
+  setSheetBack(null);
   const r = profile.rating || 1000, t = tierOf(r);
   const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)}">${TITLES[profile.title]}</b>` : "";
   const body =
