@@ -206,39 +206,74 @@ const server = http.createServer((req, res) => {
 });
 
 // --- authoritative combat rules (client mirrors these for its own UI) ---
+// See DESIGN.md for the full system. THE LAW OF ELEMENTS decides a card's type by its recipe shape:
+//   X+X = Defense · X+Y = Attack · X+X+X = Landscape · X+X+Y = Spell · X+Y+Z = Trap.
 const START_HP = 30;
-const DISABLE_ROUNDS = 1; // an unblocked attack disables an enemy base element for this many upcoming rounds
 // mana economy: base mana grows +1 every 2 rounds. On EVEN rounds you may carry exactly ONE
 // unspent mana over from the previous (odd) round; on ODD rounds nothing carries and base
 // "catches up" to the max. So max = base on odd rounds, base+1 on even rounds.
 const baseMana = (round) => 2 + Math.floor((round - 1) / 2); // 2,2,3,3,4,4,5,5,6,6…
 const carryCap = (round) => (round % 2 === 0 ? 1 : 0);       // carry 1 mana, and only INTO an even round
 const ROUND_SECONDS = 30; // planning clock; a stalled/absent player is auto-resolved after this
-// attacks: pure damage (blocking the attack with its counter negates it). Two cost tiers: cheap vs expensive.
+const DEF_MANA_ON_BLOCK = 2; // one-shot, non-compounding ramp: a defense that BLOCKS charges the defender
+
+// every card's base-element composition — the single source of truth for blocking, terrain, and empower.
+const ELEM = {
+  // attacks (two distinct elements)
+  scald: ["fire","water"], storm: ["water","air"], sandstorm: ["earth","air"],
+  mudslide: ["water","earth"], wildfire: ["fire","air"], meteor: ["fire","earth"],
+  // defenses (a matching pair → one element)
+  firewall: ["fire"], ward: ["water"], bulwark: ["earth"], galebarrier: ["air"],
+  // landscapes (a pure triple → one element)
+  volcano: ["fire"], ocean: ["water"], highlands: ["earth"], tempest: ["air"],
+  // spells (a pair + a catalyst; tag = the doubled element)
+  renewal: ["water"], ember: ["fire"], tide: ["water"], stone: ["earth"], wind: ["air"], siphon: ["fire"],
+  // traps (three different elements)
+  riptide: ["water","earth","air"], backdraft: ["fire","earth","air"],
+  tempestsnare: ["fire","water","air"], quicksand: ["fire","water","earth"],
+};
+// attacks: pure damage. A defense sharing EITHER element blocks it (see resolveRound). Two cost tiers.
 const ATTACKS = {
-  storm:    { dmg: 6,  counter: "mountain" }, // cheap (cost 2)
-  firebolt: { dmg: 8,  counter: "ward"     }, // expensive (cost 3)
-  meteor:   { dmg: 11, counter: "planet"   }, // expensive (cost 3)
-  plague:   { dmg: 9,  counter: "life"     }, // expensive (cost 3)
+  scald:    { dmg: 6 }, storm:   { dmg: 6 }, sandstorm: { dmg: 6 },  // cheap (cost 2)
+  mudslide: { dmg: 7 }, wildfire:{ dmg: 7 }, meteor:    { dmg: 9 },  // expensive (cost 3)
 };
-// defenses: block an attack and/or heal (heals are small now). Some cards also grant +1 mana next round.
-const DEFENSE = {
-  mountain: { blocks: "storm",    heal: 2 }, // cheap counter to a cheap attack
-  ward:     { blocks: "firebolt", heal: 2 }, // expensive counter to an expensive attack
-  planet:   { blocks: "meteor",   heal: 2 },
-  life:     { blocks: "plague",   heal: 3 },
-  hearth:   { heal: 2, mana: 1 },            // recovery + a spark of mana next round
-  dew:      { heal: 1, mana: 1 },            // light heal + mana
+// defenses: block any attack sharing their element; on a successful block the defender gets a mana burst. No heal.
+const DEFENSE = { firewall: {}, ward: {}, bulwark: {}, galebarrier: {} };
+// spells: resolve instantly and do NOT persist. heal, empower (next attack of an element +amt), or mana burn.
+const SPELLS = {
+  renewal: { heal: 6 },
+  ember:   { empower: "fire",  amt: 2 },
+  tide:    { empower: "water", amt: 2 },
+  stone:   { empower: "earth", amt: 2 },
+  wind:    { empower: "air",   amt: 2 },
+  siphon:  { burn: 2 },
 };
-// traps: fire only if the opponent attacks you this round (one springs per incoming attack).
+// landscapes: one shared terrain slot; +1 to ALL damage of its element (both players). Persists until replaced.
+const LANDSCAPES = { volcano: "fire", ocean: "water", highlands: "earth", tempest: "air" };
+// traps: conditional — a set trap springs only when its condition is met this round.
+//   expensiveAttack: opp played a cost-3 attack · oppHealed: opp gained HP · lowHp: my HP < LOW_HP · oppRich: opp banked >= RICH mana
 const TRAPS = {
-  lava:   { retaliate: 5 },              // 🌋 Volcano — erupt for 5 back
-  steam:  { heal: 3 },                   // ♨️ Steam — vent, heal 3
-  energy: { retaliate: 3, mana: 1 },     // ⚡ Energy — shock back + charge 1 mana
-  mud:    { retaliate: 2, heal: 2 },     // 🟤 Mud — a little of both
+  riptide:      { retaliate: 5, cond: "expensiveAttack" },
+  backdraft:    { retaliate: 6, cond: "oppHealed" },
+  tempestsnare: { retaliate: 6, cond: "lowHp" },
+  quicksand:    { retaliate: 3, burn: 2, cond: "oppRich" },
 };
-// total mana (craft + play) each card costs — two tiers now: cheap (2) and expensive (3)
-const COST = { storm:2, firebolt:3, meteor:3, plague:3, ward:2, mountain:2, planet:3, life:3, hearth:2, dew:2, lava:2, steam:2, energy:2, mud:2 };
+const LOW_HP = 12, RICH = 3;
+// total mana (craft + play) each card costs — cheap (2) vs expensive (3)
+const COST = {
+  scald:2, storm:2, sandstorm:2, mudslide:3, wildfire:3, meteor:3,
+  firewall:2, ward:2, bulwark:2, galebarrier:2,
+  renewal:3, ember:2, tide:2, stone:2, wind:2, siphon:3,
+  volcano:3, ocean:3, highlands:3, tempest:3,
+  riptide:3, backdraft:3, tempestsnare:3, quicksand:3,
+};
+// id -> gameplay kind, so the bot and relays can classify any card
+const KINDOF = {};
+for (const k in ATTACKS)    KINDOF[k] = "attack";
+for (const k in DEFENSE)    KINDOF[k] = "shield";
+for (const k in SPELLS)     KINDOF[k] = "spell";
+for (const k in LANDSCAPES) KINDOF[k] = "landscape";
+for (const k in TRAPS)      KINDOF[k] = "trap";
 // cosmetic card-background skins unlocked with coins (value = price; 0 = free default). No gameplay effect.
 const SKINS = { default:0, ember:5, ocean:5, forest:8, royal:12, rose:15, gold:20 };
 // cosmetic profile icons (avatars), also coin-unlocked; purely visual
@@ -281,16 +316,17 @@ function stateOf(room) {
       back: p.cardBack || "default",
       skin: p.cardSkin || "default",    // card-background skin, so the reveal showcase can use the owner's skin
       traps: p.traps ? p.traps.slice() : [], // set traps that persist until they spring (foe's shown anonymously)
+      empower: Object.assign({}, p.empower || {}), // pending "next X attack +N" buffs (own display)
       rating: p.rating != null ? p.rating : null,
     };
-  });
+  }).map((s, i) => (s.landscape = room.landscape || null, s.landscapeCard = room.landscapeCard || null, s));
 }
 function pushState(room, log) {
   broadcast(room, { type: "state", players: stateOf(room), log });
 }
 function addPlayer(ws, room, name) {
   const prof = ws.playerId ? store.getProfile(ws.playerId) : null; // pull cosmetics from the saved profile (authoritative)
-  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], traps: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
+  const p = { ws, name: String(name || "Player").slice(0, 16), hp: START_HP, shields: [], traps: [], empower: {}, disabled: {}, manaSpent: 0, leftover: 0, mana: 0,
     playerId: ws.playerId || null, title: prof ? (prof.title || "") : "", icon: prof ? (prof.icon || "default") : "default",
     nameColor: prof ? (prof.nameColor || "default") : "default", cardBack: prof ? (prof.cardBack || "default") : "default",
     cardSkin: prof ? (prof.cardSkin || "default") : "default", rating: prof ? (prof.rating || 1000) : null };
@@ -298,7 +334,8 @@ function addPlayer(ws, room, name) {
   room.players.push(p);
   send(ws, { type: "joined", slot: room.players.length - 1, code: room.code });
   if (room.players.length === 2) {
-    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+    room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.empower = {}; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+    room.landscape = null; room.landscapeCard = null;
     room.round = 1;
     beginRound(room, "start");
   } else {
@@ -323,12 +360,17 @@ function leaveRoom(ws) { // used when a socket starts a new match (rematch) or d
 // --- bot: builds a plan for the round out of its AP budget (each card costs craft + deploy) ---
 function botPlan(room, bot) {
   const deploys = []; let rem = bot.mana != null ? bot.mana : baseMana(room.round);
+  let traps = 0, lands = 0;
   while (true) {
-    const aff = Object.keys(COST).filter((c) => COST[c] <= rem);
+    let aff = Object.keys(COST).filter((c) => COST[c] <= rem);
+    if (traps >= 1) aff = aff.filter((c) => KINDOF[c] !== "trap");         // cap one trap per turn (matches the rule)
+    if (lands >= 1) aff = aff.filter((c) => KINDOF[c] !== "landscape");    // no point stacking terrain in one turn
     if (!aff.length) break;
     const card = aff[(Math.random() * aff.length) | 0];
     rem -= COST[card];
-    deploys.push({ k: ATTACKS[card] ? "attack" : TRAPS[card] ? "trap" : "shield", card });
+    const k = KINDOF[card] || "attack";
+    if (k === "trap") traps++; if (k === "landscape") lands++;
+    deploys.push({ k, card });
   }
   bot.plan = { deploys }; bot.ready = true; // random-affordable, not strategic
 }
@@ -349,43 +391,74 @@ function resolveRound(room) {
     const left = p.reportedLeft != null ? p.reportedLeft : ((p.mana || 0) - spent);
     p.leftover = Math.max(0, Math.min(p.mana || 0, left)); // unspent mana banks toward next round
   }
-  // 1) defenses go first, so a shield played this round blocks an attack played this round; heals + restores apply now too
+  for (const p of [A, B]) { p.healedThisRound = false; p.empower = p.empower || {}; }
+  // 1) defenses raise their shields (they now do nothing on their own — they pay off by BLOCKING, phase 3)
   for (const p of [A, B]) for (const d of of(p, "shield")) {
-    const def = DEFENSE[d.card] || {};
-    const ev = { t: "defense", who: slot(p), card: d.card, block: !!def.blocks, heal: 0, mana: def.mana || 0 };
-    const bits = [];
-    if (def.blocks) { p.shields.push(d.card); bits.push(`raises ${d.card}`); }
-    if (def.heal) { const before = p.hp; p.hp = Math.min(START_HP, p.hp + def.heal); ev.heal = p.hp - before; if (ev.heal) bits.push(`heals ${ev.heal}`); }
-    if (def.mana) { p.manaBonus = (p.manaBonus || 0) + def.mana; bits.push(`+${def.mana} mana`); }
-    events.push(ev);
-    logs.push(`🛡️ ${p.name} ${bits.join(" · ") || d.card}`);
+    if (!DEFENSE[d.card]) continue;
+    p.shields.push(d.card);
+    events.push({ t: "defense", who: slot(p), card: d.card });
+    logs.push(`🛡️ ${p.name} raises ${d.card}`);
   }
-  // 2) attacks — both sides land at once (no turn order, so no first-strike edge); an unblocked hit also disables an element
+  // 2) spells + landscapes resolve instantly (before attacks, so a rite/terrain buffs this round's attack too)
+  for (const p of [A, B]) {
+    for (const d of of(p, "spell")) {
+      const sp = SPELLS[d.card]; if (!sp) continue;
+      const opp = p === A ? B : A;
+      const ev = { t: "spell", who: slot(p), card: d.card, heal: 0, empower: null, amt: 0, burn: 0 };
+      if (sp.heal) { const before = p.hp; p.hp = Math.min(START_HP, p.hp + sp.heal); ev.heal = p.hp - before; if (ev.heal) p.healedThisRound = true; }
+      if (sp.empower) { p.empower[sp.empower] = (p.empower[sp.empower] || 0) + sp.amt; ev.empower = sp.empower; ev.amt = sp.amt; }
+      if (sp.burn) { opp.manaBonus = (opp.manaBonus || 0) - sp.burn; ev.burn = sp.burn; }
+      events.push(ev);
+      logs.push(`✨ ${p.name} casts ${d.card}`);
+    }
+    for (const d of of(p, "landscape")) {
+      const el = LANDSCAPES[d.card]; if (!el) continue;
+      room.landscape = el; room.landscapeCard = d.card; // one shared slot; a new terrain replaces the old
+      events.push({ t: "landscape", who: slot(p), card: d.card, element: el });
+      logs.push(`🟣 ${p.name} shapes the field → ${d.card}`);
+    }
+  }
+  // 3) attacks — both land at once. A defense sharing EITHER element blocks (consumed) and charges the defender.
+  //    Damage = base + terrain(+1 if landscape matches an element) + empower(one-shot "next X attack" buffs).
   for (const [me, opp] of [[A, B], [B, A]]) for (const d of of(me, "attack")) {
     const a = ATTACKS[d.card]; if (!a) continue;
-    const i = opp.shields.indexOf(a.counter);
-    if (i >= 0) { opp.shields.splice(i, 1); events.push({ t: "attack", who: slot(me), card: d.card, blocked: true, dmg: a.dmg }); logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card}`); }
-    else {
-      opp.hp = Math.max(0, opp.hp - a.dmg);
-      events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg: a.dmg });
-      logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${a.dmg}`);
+    const els = ELEM[d.card] || [];
+    const bi = opp.shields.findIndex((s) => els.includes((ELEM[s] || [])[0])); // shield element matches an attack element
+    if (bi >= 0) {
+      const by = opp.shields[bi];
+      opp.shields.splice(bi, 1);
+      opp.manaBonus = (opp.manaBonus || 0) + DEF_MANA_ON_BLOCK; // one-shot defensive ramp
+      events.push({ t: "attack", who: slot(me), card: d.card, blocked: true, dmg: a.dmg, mana: DEF_MANA_ON_BLOCK, by });
+      logs.push(`🛡️ ${opp.name} blocks ${me.name}'s ${d.card} (+${DEF_MANA_ON_BLOCK} mana)`);
+      continue;
     }
+    const land = (room.landscape && els.includes(room.landscape)) ? 1 : 0;
+    let emp = 0; for (const e of els) if (me.empower[e]) { emp += me.empower[e]; delete me.empower[e]; } // consume matching buffs
+    const dmg = a.dmg + land + emp;
+    opp.hp = Math.max(0, opp.hp - dmg);
+    events.push({ t: "attack", who: slot(me), card: d.card, blocked: false, dmg, land: !!land, emp });
+    logs.push(`💥 ${me.name}'s ${d.card} hits ${opp.name} for ${dmg}${land ? " (+terrain)" : ""}${emp ? ` (+${emp} rite)` : ""}`);
   }
-  // 3) traps — a set trap stays hidden on the board until the opponent attacks you; then ONE trap springs
-  //    per incoming attack. Only one trap may be set per round; a set trap can also spring the round it's laid.
-  for (const p of [A, B]) for (const d of of(p, "trap").slice(0, 1)) p.traps.push(d.card); // cap: one new trap per turn
+  // 4) traps — set traps persist face-down until their CONDITION is met, then spring. One new trap may be set per round.
+  for (const p of [A, B]) for (const d of of(p, "trap").slice(0, 1)) if (TRAPS[d.card]) p.traps.push(d.card);
   for (const [me, opp] of [[A, B], [B, A]]) {
-    let springs = Math.min(of(opp, "attack").length, me.traps.length); // one trap per attack
-    while (springs-- > 0) {
-      const card = me.traps.shift();
-      const tr = TRAPS[card]; if (!tr) continue;
-      const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, heal: 0, mana: tr.mana || 0 };
+    const oppAttacks = of(opp, "attack");
+    const met = {
+      expensiveAttack: oppAttacks.some((d) => (COST[d.card] || 0) >= 3),
+      oppHealed: !!opp.healedThisRound,
+      lowHp: me.hp < LOW_HP,
+      oppRich: (me === A ? A : B) && (opp.reportedLeft != null ? opp.reportedLeft : opp.leftover || 0) >= RICH,
+    };
+    me.traps = me.traps.filter((card) => {
+      const tr = TRAPS[card]; if (!tr) return false;
+      if (!met[tr.cond]) return true; // condition unmet — stays set on the board
+      const ev = { t: "trap", who: slot(me), card, triggered: true, retaliate: 0, burn: 0, cond: tr.cond };
       if (tr.retaliate) { opp.hp = Math.max(0, opp.hp - tr.retaliate); ev.retaliate = tr.retaliate; }
-      if (tr.heal) { const before = me.hp; me.hp = Math.min(START_HP, me.hp + tr.heal); ev.heal = me.hp - before; }
-      if (tr.mana) { me.manaBonus = (me.manaBonus || 0) + tr.mana; }
+      if (tr.burn) { opp.manaBonus = (opp.manaBonus || 0) - tr.burn; ev.burn = tr.burn; }
       events.push(ev);
-      logs.push(`🪤 ${me.name}'s ${card} trap springs on ${opp.name}!`);
-    }
+      logs.push(`🪤 ${me.name}'s ${card} springs on ${opp.name}!`);
+      return false; // consumed
+    });
   }
   broadcast(room, { type: "resolve", players: stateOf(room), logs, events });
   const aDead = A.hp <= 0, bDead = B.hp <= 0;
@@ -443,8 +516,8 @@ function beginRound(room, type) {
   const round = room.round, base = baseMana(round), cap = carryCap(round), nextCap = carryCap(round + 1);
   for (const p of room.players) {
     const carried = Math.min(p.leftover || 0, cap); // bank up to the cap; any excess is lost
-    const bonus = p.manaBonus || 0;                 // mana granted by hearth/dew/energy last round
-    p.mana = base + carried + bonus;
+    const bonus = p.manaBonus || 0;                 // defensive-block ramp (+) or siphon burn (−) from last round
+    p.mana = Math.max(0, base + carried + bonus);   // siphon can drive the bonus negative; never below 0
     p.carriedIn = carried; p.bonusIn = bonus; p.manaBonus = 0;
     p.leftover = 0; p.reportedLeft = null; // recomputed at resolve from whatever is left unspent
   }
@@ -497,9 +570,10 @@ wss.on("connection", (ws) => {
       const room = { code: randCode(), players: [], bot: true };
       rooms.set(room.code, room);
       addPlayer(ws, room, m.name); // human = slot 0
-      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], traps: [], disabled: {}, manaSpent: 0, leftover: 0, mana: 0, isBot: true };
+      const bot = { ws: { readyState: 3 }, name: "⚙️ Elemental Bot", hp: START_HP, shields: [], traps: [], empower: {}, disabled: {}, manaSpent: 0, leftover: 0, mana: 0, isBot: true };
       room.players.push(bot); // slot 1
-      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+      room.players.forEach((x) => { x.hp = START_HP; x.shields = []; x.traps = []; x.empower = {}; x.disabled = {}; x.manaSpent = 0; x.leftover = 0; x.plan = null; x.ready = false; });
+      room.landscape = null; room.landscapeCard = null;
       room.round = 1;
       beginRound(room, "start");
       return;
@@ -512,7 +586,7 @@ wss.on("connection", (ws) => {
 
     if (m.type === "field") {
       if (me.ready) return;                        // once locked in, the set is frozen
-      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap") ? k : "attack";
+      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap" || k === "spell" || k === "landscape") ? k : "attack";
       const kinds = Array.isArray(m.kinds) ? m.kinds.slice(0, 16).map(KIND) : []; // per-card KIND only — never the card itself
       send(opp.ws, { type: "foeField", kinds });   // opponent sees oriented face-down backs (shields sideways), never identities
       return;
@@ -542,7 +616,7 @@ wss.on("connection", (ws) => {
       me.reportedLeft = Math.max(0, m.left | 0);   // client's true unspent mana (counts crafts, not just plays)
       me.ready = true;
       // tell the opponent the KIND of each committed card (for orientation) — never which card
-      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap") ? k : "attack";
+      const KIND = (k) => (k === "attack" || k === "shield" || k === "trap" || k === "spell" || k === "landscape") ? k : "attack";
       const kinds = me.plan.deploys.map((d) => KIND(d.k));
       send(opp.ws, { type: "oppReady", count: kinds.length, kinds });
       if (opp.isBot) botPlan(room, opp);

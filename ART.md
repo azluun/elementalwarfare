@@ -19,10 +19,21 @@ straight into `public/img/` at the size noted.
 
 ---
 
-## ✅ Done — every gameplay glyph
-Elements: `fire water earth air` · Attacks: `storm firebolt meteor plague` ·
-Defenses: `mountain ward planet life hearth dew` · Traps: `lava steam energy mud` · plus `mana`.
-Nothing here falls back to emoji anymore.
+## Gameplay glyphs — the new elemental card set
+
+The card system was rebuilt around **THE LAW OF ELEMENTS** (see `DESIGN.md`). Add a PNG at
+`img/<id>.png` for any card and it replaces the emoji fallback. Base elements + `mana` already
+have art; the rest currently fall back to emoji.
+
+- **Bases (have art):** `fire water earth air` · plus `mana`.
+- **Attacks (🔴):** `scald ♨️` · `storm ⛈️` · `sandstorm 🌫️` · `mudslide 🏞️` · `wildfire 🔥` · `meteor ☄️`
+- **Defenses (🔵):** `firewall 🧱` · `ward 🛡️` · `bulwark ⛰️` · `galebarrier 🌬️`
+- **Spells (🟡):** `renewal 🌿` · `ember 🔥` · `tide 💧` · `stone 🪨` · `wind 🍃` · `siphon 🩸`
+- **Landscapes (🟣):** `volcano 🌋` · `ocean 🌊` · `highlands 🏔️` · `tempest 🌪️`
+- **Traps (🟢):** `riptide 🫧` · `backdraft 💥` · `tempestsnare 🕸️` · `quicksand 🕳️`
+
+> Old ids (`firebolt plague mountain planet life hearth dew lava steam energy mud`) are retired —
+> their PNGs, if present, are simply unused now.
 
 ---
 
@@ -73,19 +84,10 @@ Everything the game draws with an emoji, grouped by where it lives. **Has art** 
 custom PNG. **Hookable** = a drop-in slot exists (add the file). **Not hooked** = still plain
 emoji; I can put any of these on the same drop-in system on request.
 
-### Gameplay glyphs — ✅ all have art
-| emoji | id | | emoji | id |
-|---|---|---|---|---|
-| 🔥 | fire | | ⛈️ | storm |
-| 💧 | water | | 🔥 | firebolt |
-| 🌍 | earth | | ☄️ | meteor |
-| 💨 | air | | 🦠 | plague |
-| 🌋 | lava (Volcano) | | ⛰️ | mountain |
-| ♨️ | steam | | 💧 | ward |
-| ⚡ | energy · mana | | 🌐 | planet |
-| 🟤 | mud | | 🌿 | life |
-| | | | 🕯️ | hearth |
-| | | | 💦 | dew |
+### Gameplay glyphs — bases have art, cards fall back to emoji
+Bases 🔥 `fire` · 💧 `water` · 🌍 `earth` · 💨 `air` and ⚡ `mana` have art. Every card id
+and its emoji fallback is listed under **Gameplay glyphs — the new elemental card set** at the
+top of this file. Drop `img/<id>.png` to give any card real art.
 
 Mana also shows the ⚡→orb everywhere (`img/mana.png`, done).
 

@@ -8,7 +8,7 @@
   :root{
     --bg:#0f1310; --panel:#182019; --panel2:#20291f; --line:#2c3828;
     --ink:#e9ecdf; --soft:#9aa389; --accent:#54b483; --amber:#e0a24b;
-    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a; --cardbg:#20291f; --trap:#e0894b;
+    --you:#54b483; --foe:#e2564f; --shield:#4fb3c0; --new:#f0708a; --cardbg:#20291f; --trap:#5bbf6a; --spell:#e8c34a; --land:#a67cd6;
     --dsp:"Fraunces",Georgia,serif; --body:"Spline Sans","Segoe UI",system-ui,sans-serif;
   }
   *{box-sizing:border-box}
@@ -84,6 +84,23 @@
   .setcard .sc-nm{font-size:8.5px;font-weight:700;text-align:center;line-height:1.03;max-width:100%;padding:0 2px}
   .setcard.def .sc-nm{display:none}
   .setcard.attack{border-color:var(--foe)} .setcard.shield{border-color:var(--shield)} .setcard.trap{border-color:var(--trap)}
+  /* the two new types (yellow Spell, purple Landscape) share every card selector */
+  .setcard.spell,.card.spell,.bigcard.spell,.booktile.spell,.tnode.spell,.rv-card.spell{border-color:var(--spell)}
+  .setcard.landscape,.card.landscape,.bigcard.landscape,.booktile.landscape,.tnode.landscape,.rv-card.landscape{border-color:var(--land)}
+  .bigcard.spell .bc-type,.card.spell .playhint{color:var(--spell)}
+  .bigcard.landscape .bc-type,.card.landscape .playhint{color:var(--land)}
+  .stchip.spell{border-color:var(--spell);color:var(--spell)} .stchip.landscape{border-color:var(--land);color:var(--land)}
+  .bigcard .bc-stats .st.el{color:var(--soft);letter-spacing:1px;font-size:12px} .bigcard .bc-stats .st.cond{color:var(--land);font-size:10px}
+  .bigcard .bc-stats .st.land{color:var(--land)}
+  #showcase .sc-msg .emp{color:var(--spell)} #showcase .sc-msg .land{color:var(--land)}
+  /* shared terrain banner on the board */
+  #terrain{margin:2px auto 0;padding:3px 10px;border-radius:999px;font-size:11px;text-align:center;max-width:92%;
+    background:color-mix(in srgb,var(--land) 22%,var(--panel));border:1px solid var(--land);color:var(--ink);animation:riseIn .3s ease-out}
+  #terrain b{color:var(--land)}
+  /* the Law box at the top of the recipe book */
+  .lawbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12px;margin-bottom:10px}
+  .lawrow{display:flex;gap:8px;align-items:center;margin-top:4px;color:var(--soft)} .lawrow span{min-width:74px}
+  .k-attack{color:var(--foe)} .k-shield{color:var(--shield)} .k-spell{color:var(--spell)} .k-land{color:var(--land)} .k-trap{color:var(--trap)}
   .setcard.committed{opacity:.86}                 /* already set in an earlier round — waits until used */
   .setcard.committed::after{content:"🂠";position:absolute;bottom:1px;right:3px;font-size:9px;opacity:.5}
   .setcard .rm{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--panel);
@@ -481,6 +498,7 @@
 
       <div class="zone foe" id="fieldfoe"></div>
       <div class="clash" id="clash"><span id="clashmsg">⚔️ THE FIELD</span></div>
+      <div id="terrain" hidden></div>
       <div class="zone me" id="fieldme"></div>
 
       <div class="hpbadge me" id="mybadge">
@@ -554,26 +572,42 @@
 <script>
 // ---- card definitions (mirror server ATTACKS for the offense numbers) ----
 const BASE = { fire:"🔥", water:"💧", earth:"🌍", air:"💨" };
+const ELNAME = { fire:"Fire", water:"Water", earth:"Earth", air:"Air" };
+// THE LAW OF ELEMENTS (see DESIGN.md): a recipe's shape decides the type.
+//   X+X = Defense · X+Y = Attack · X+X+X = Landscape · X+X+Y = Spell · X+Y+Z = Trap.
+// Mirrors the authoritative tables in server.js.
 const CARDS = {
-  // -- traps: play them reactively OR craft them into the bigger cards below (never a dead craft) --
-  lava:    {em:"🌋",name:"Volcano",kind:"trap", trap:{retaliate:5},          recipe:["fire","earth"], info:"trap: erupt 5 if attacked · → Meteor"},
-  steam:   {em:"♨️",name:"Steam",  kind:"trap", trap:{heal:3},               recipe:["fire","water"], info:"trap: heal 3 if attacked · → Ward"},
-  energy:  {em:"⚡",name:"Energy",  kind:"trap", trap:{retaliate:3,mana:1},   recipe:["fire","air"],   info:"trap: 3 back + ⚡1 mana · → Firebolt"},
-  mud:     {em:"🟤",name:"Mud",    kind:"trap", trap:{retaliate:2,heal:2},   recipe:["water","earth"],info:"trap: 2 back + heal 2 · → Plague"},
-  // -- attacks: pure damage (blocking negates it). cheap tier (Storm) vs expensive tier --
-  storm:   {em:"⛈️",name:"Storm",   kind:"attack",dmg:6, counter:"mountain",recipe:["water","air"],   info:"6 dmg · blocked by Mountain"},
-  firebolt:{em:"🔥",name:"Firebolt",kind:"attack",dmg:8, counter:"ward",    recipe:["energy","fire"], info:"8 dmg · blocked by Ward"},
-  meteor:  {em:"☄️",name:"Meteor",  kind:"attack",dmg:11,counter:"planet",  recipe:["lava","fire"],   info:"11 dmg · blocked by Planet"},
-  plague:  {em:"🦠",name:"Plague",  kind:"attack",dmg:9, counter:"life",    recipe:["mud","fire"],    info:"9 dmg · blocked by Life"},
-  // -- defenses: block an attack + a small heal --
-  mountain:{em:"⛰️",name:"Mountain",  kind:"shield",blocks:"storm",   heal:2, recipe:["earth","air"],     info:"blocks Storm · heal 2 · → Planet"},
-  ward:    {em:"💧",name:"Water Ward",kind:"shield",blocks:"firebolt",heal:2, recipe:["water","water"],   info:"blocks Firebolt · heal 2"},
-  planet:  {em:"🌐",name:"Planet",    kind:"shield",blocks:"meteor",  heal:2, recipe:["mountain","earth"],info:"blocks Meteor · heal 2"},
-  life:    {em:"🌿",name:"Life",      kind:"shield",blocks:"plague",  heal:3, recipe:["steam","air"],     info:"blocks Plague · heal 3"},
-  // -- recovery: no block — a small heal and a spark of mana next round --
-  hearth:  {em:"🕯️",name:"Hearth",   kind:"shield",heal:2, mana:1, recipe:["fire","fire"],  info:"heal 2 · ⚡+1 mana next round"},
-  dew:     {em:"💦",name:"Dew",       kind:"shield",heal:1, mana:1, recipe:["air","air"],    info:"heal 1 · ⚡+1 mana next round"},
+  // ── Attacks — mixed pairs (dual-element). A defense sharing EITHER element blocks it. ──
+  scald:    {em:"♨️", name:"Scald",     kind:"attack", el:["fire","water"], dmg:6, recipe:["fire","water"],  info:"Fire/Water · 6 dmg · blocked by a Fire or Water defense"},
+  storm:    {em:"⛈️", name:"Storm",     kind:"attack", el:["water","air"],  dmg:6, recipe:["water","air"],   info:"Water/Air · 6 dmg · blocked by a Water or Air defense"},
+  sandstorm:{em:"🌫️", name:"Sandstorm", kind:"attack", el:["earth","air"],  dmg:6, recipe:["earth","air"],   info:"Earth/Air · 6 dmg · blocked by an Earth or Air defense"},
+  mudslide: {em:"🏞️", name:"Mudslide",  kind:"attack", el:["water","earth"],dmg:7, recipe:["water","earth"], info:"Water/Earth · 7 dmg · blocked by a Water or Earth defense"},
+  wildfire: {em:"🔥", name:"Wildfire",  kind:"attack", el:["fire","air"],   dmg:7, recipe:["fire","air"],    info:"Fire/Air · 7 dmg · blocked by a Fire or Air defense"},
+  meteor:   {em:"☄️", name:"Meteor",    kind:"attack", el:["fire","earth"], dmg:9, recipe:["fire","earth"],  info:"Fire/Earth · 9 dmg · blocked by a Fire or Earth defense"},
+  // ── Defenses — matching pairs. Block any attack sharing the element; a block charges you +2 mana. ──
+  firewall:   {em:"🧱", name:"Firewall",    kind:"shield", el:["fire"],  block:true, recipe:["fire","fire"],   info:"Fire defense · blocks any Fire attack · +2 mana when it blocks"},
+  ward:       {em:"🛡️", name:"Ward",        kind:"shield", el:["water"], block:true, recipe:["water","water"], info:"Water defense · blocks any Water attack · +2 mana when it blocks"},
+  bulwark:    {em:"⛰️", name:"Bulwark",     kind:"shield", el:["earth"], block:true, recipe:["earth","earth"], info:"Earth defense · blocks any Earth attack · +2 mana when it blocks"},
+  galebarrier:{em:"🌬️", name:"Gale Barrier",kind:"shield", el:["air"],   block:true, recipe:["air","air"],     info:"Air defense · blocks any Air attack · +2 mana when it blocks"},
+  // ── Spells — a defense + a catalyst. Resolve instantly, don't persist. ──
+  renewal:{em:"🌿", name:"Renewal",    kind:"spell", el:["water"], heal:6,                 recipe:["ward","earth"],       info:"Heal 6"},
+  ember:  {em:"🔥", name:"Ember Rite",  kind:"spell", el:["fire"],  empower:"fire",  amt:2, recipe:["firewall","air"],     info:"Your next Fire attack +2 damage"},
+  tide:   {em:"💧", name:"Tide Charm",  kind:"spell", el:["water"], empower:"water", amt:2, recipe:["ward","air"],         info:"Your next Water attack +2 damage"},
+  stone:  {em:"🪨", name:"Stone Rite",  kind:"spell", el:["earth"], empower:"earth", amt:2, recipe:["bulwark","fire"],     info:"Your next Earth attack +2 damage"},
+  wind:   {em:"🍃", name:"Wind Rite",   kind:"spell", el:["air"],   empower:"air",   amt:2, recipe:["galebarrier","fire"], info:"Your next Air attack +2 damage"},
+  siphon: {em:"🩸", name:"Siphon",      kind:"spell", el:["fire"],  burn:2,                 recipe:["firewall","water"],   info:"Burn 2 of the enemy's banked mana"},
+  // ── Landscapes — a pure triple. One shared terrain slot; +1 to ALL damage of its element. ──
+  volcano:  {em:"🌋", name:"Volcano",   kind:"landscape", el:["fire"],  terrain:"fire",  recipe:["firewall","fire"],   info:"Terrain: ALL Fire damage +1 (both players) until replaced"},
+  ocean:    {em:"🌊", name:"Ocean",     kind:"landscape", el:["water"], terrain:"water", recipe:["ward","water"],      info:"Terrain: ALL Water damage +1 (both players) until replaced"},
+  highlands:{em:"🏔️", name:"Highlands", kind:"landscape", el:["earth"], terrain:"earth", recipe:["bulwark","earth"],   info:"Terrain: ALL Earth damage +1 (both players) until replaced"},
+  tempest:  {em:"🌪️", name:"Tempest",   kind:"landscape", el:["air"],   terrain:"air",   recipe:["galebarrier","air"], info:"Terrain: ALL Air damage +1 (both players) until replaced"},
+  // ── Traps — three different elements. Set face-down; spring only when their condition is met. ──
+  riptide:     {em:"🫧", name:"Riptide",      kind:"trap", el:["water","earth","air"], trap:{retaliate:5},        cond:"enemy plays an expensive attack", recipe:["mudslide","air"], info:"If the enemy plays an expensive (cost-3) attack → 5 back"},
+  backdraft:   {em:"💥", name:"Backdraft",    kind:"trap", el:["fire","earth","air"],  trap:{retaliate:6},        cond:"enemy heals",                     recipe:["meteor","air"],   info:"If the enemy heals this round → 6 back"},
+  tempestsnare:{em:"🕸️", name:"Tempest Snare",kind:"trap", el:["fire","water","air"],  trap:{retaliate:6},        cond:"your HP drops below 12",          recipe:["scald","air"],    info:"If your HP is below 12 at resolve → 6 back"},
+  quicksand:   {em:"🕳️", name:"Quicksand",    kind:"trap", el:["fire","water","earth"],trap:{retaliate:3,burn:2}, cond:"enemy banks 3+ mana",             recipe:["scald","earth"],  info:"If the enemy banks 3+ mana → 3 back + burn 2 mana"},
 };
+const PLAYABLE = (k) => k === "attack" || k === "shield" || k === "trap" || k === "spell" || k === "landscape";
 const RECIPE = {}; // "a+b" -> cardId
 for (const [id,c] of Object.entries(CARDS)) RECIPE[c.recipe.slice().sort().join("+")] = id;
 const EMO = (id) => BASE[id] || (CARDS[id] && CARDS[id].em) || "?";
@@ -968,10 +1002,21 @@ function applyPlayers(players){
   $("foeshields").textContent = ((foe.shields||[]).length + (foe.traps||[]).length) ? `🂠 ${(foe.shields||[]).length + (foe.traps||[]).length} set` : "";
   mySet = [...(me.shields||[]), ...(me.traps||[])];
   foeSetKinds = [...Array((foe.shields||[]).length).fill("shield"), ...Array((foe.traps||[]).length).fill("trap")];
-  myDisabled = new Set(me.disabled || []);
-  $("lockwarn").innerHTML = myDisabled.size ? `⛔ ${[...myDisabled].map(glyph).join(" ")} disabled this round` : "";
+  // pending "next X attack +N" rite buffs (your own, shown where the old disable warning was)
+  const emp = me.empower || {}, empKeys = Object.keys(emp).filter((k) => emp[k] > 0);
+  $("lockwarn").innerHTML = empKeys.length ? `<span style="color:var(--spell)">✨ ${empKeys.map((k) => `+${emp[k]} ${glyph(k)}`).join(" ")} charged</span>` : "";
+  setTerrain(me.landscape || null, me.landscapeCard || null);   // shared terrain (same for both players)
   shownHp = [players[0].hp, players[1].hp];
   foeName = foe.name; foeBack = foe.back || "default"; foeSkin = foe.skin || "default";
+}
+// the shared terrain banner — reflects the one active landscape (or hides when there is none)
+function setTerrain(element, card){
+  const t = $("terrain"); if (!t) return;
+  if (!element){ t.hidden = true; t.innerHTML = ""; return; }
+  const nm = (card && CARDS[card]) ? CARDS[card].name : (ELNAME[element] + " terrain");
+  t.hidden = false;
+  t.dataset.el = element;
+  t.innerHTML = artText(`🟣 <b>${nm}</b> · ${glyph(element)} all ${ELNAME[element]} damage +1`);
 }
 function updateUI(){
   $("turnbar").className = "turnbar " + (locked ? "theirs" : "mine");
@@ -1067,7 +1112,7 @@ function renderInv(){
     el.dataset.cardPreview = id; // hover (desktop) shows the full-size card
     el.title = "Click to add to the combiner";
     el.innerHTML = `<span class="em">${glyph(id)}</span><span class="cn">${c.name} ×${inv[id]}</span><span class="cd2">${infoHtml(c.info)}</span>`;
-    const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
+    const playable = PLAYABLE(c.kind);
     if (playable){
       el.classList.add("playable");
       const hint = document.createElement("div");
@@ -1100,7 +1145,7 @@ function onCardPointerDown(e, id){
   if (e.button != null && e.button > 0) return; // left button / touch only
   e.preventDefault(); // stop the browser starting a text selection on drag
   const c = CARDS[id], startX = e.clientX, startY = e.clientY;
-  const playable = (c.kind === "attack" || c.kind === "shield" || c.kind === "trap");
+  const playable = PLAYABLE(c.kind);
   let moved = false, longPressed = false;
   const LIFT = 78; // how far above the finger the long-press preview floats, so the finger doesn't cover the card
   // hold ~400ms without moving -> pop the big card preview (lifted above the finger); swallow the tap
@@ -1271,8 +1316,9 @@ async function startReveal(m){
   // only cards that actually DO something this round are revealed — the rest stay face-down on the board
   const acts = events.filter((e) =>
     e.t === "attack" ||                                            // attacks always resolve
-    (e.t === "trap" && e.triggered) ||                             // only sprung traps
-    (e.t === "defense" && (e.heal > 0 || e.mana > 0)));            // shields only when they heal / grant mana now
+    e.t === "spell" ||                                             // spells resolve instantly
+    e.t === "landscape" ||                                         // terrain is placed
+    (e.t === "trap" && e.triggered));                              // only sprung traps (a raised shield stays face-down)
   if (!acts.length){ finish(); return; } // everything just sat there face-down — nothing to reveal
   animating = true;
   const hp = [shownHp[0], shownHp[1]];
@@ -1281,29 +1327,38 @@ async function startReveal(m){
   await sleep(320);
 
   for (const e of acts){
-    if (e.t === "defense"){                                        // a shield that heals / grants mana
-      showcaseCard(e.card, e.who); await sleep(620);               // let it pop in first
+    if (e.t === "spell"){                                          // a spell resolves in the open, then vanishes
+      showcaseCard(e.card, e.who); await sleep(620);
       const bits = [];
       if (e.heal > 0){ bits.push(`<span class="heal">💚 +${e.heal}</span>`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
-      if (e.mana > 0) bits.push(`<span class="you">${manaIcon()} +${e.mana}</span>`);
+      if (e.empower) bits.push(`<span class="emp">✨ +${e.amt} ${ELNAME[e.empower]}</span>`);
+      if (e.burn > 0) bits.push(`<span class="hit">🩸 −${e.burn} ${manaIcon()}</span>`);
       scMsg(bits.join(" · ")); CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name}`);
-      await sleep(1800);
+      await sleep(1700);
+    }
+    else if (e.t === "landscape"){                                 // terrain reshapes the field
+      showcaseCard(e.card, e.who); await sleep(620);
+      setTerrain(e.element, e.card);
+      scMsg(`<span class="land">🟣 ${glyph(e.element)} +1 ${ELNAME[e.element]} dmg</span>`);
+      CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <b>shapes the field</b>`);
+      await sleep(1700);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
       showcaseCard(e.card, e.who);                                 // the attack DASHES toward its target
       await sleep(560);                                            // arrives, then the hit lands
       if (e.blocked){
-        const shieldId = CARDS[e.card].counter;
+        const shieldId = e.by;                                     // the exact defense that blocked (server-reported)
         if (CARDS[shieldId]) flyShieldOver(shieldId, tgt);         // shield slams on top from the defender's side
         await sleep(360);
-        scMsg(`<span class="blk">🛡️ BLOCKED</span>`); shakeBoard();
+        scMsg(`<span class="blk">🛡️ BLOCKED</span>${e.mana ? ` <span class="you">${manaIcon()} +${e.mana}</span>` : ""}`); shakeBoard();
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ ${CARDS[shieldId] ? CARDS[shieldId].name : "blocked"}</span>`);
         await sleep(1700);
       }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
-        scMsg(`<span class="hit">💥 −${e.dmg}</span>`);
+        const extra = `${e.land ? ` <span class="land">🟣 terrain</span>` : ""}${e.emp ? ` <span class="emp">✨ +${e.emp}</span>` : ""}`;
+        scMsg(`<span class="hit">💥 −${e.dmg}</span>${extra}`);
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>`);
         dmgFloat(tgt, e.dmg); shakeBoard(); if (tgt === myslot) flashHit();
         await sleep(1800);
@@ -1313,8 +1368,7 @@ async function startReveal(m){
       const c = CARDS[e.card], bits = [], tgt = 1 - e.who;
       showcaseCard(e.card, e.who); await sleep(620);
       if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); if (tgt === myslot) flashHit(); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
-      if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`<span class="heal">💚 +${e.heal}</span>`); }
-      if (e.mana){ bits.push(`<span class="you">${manaIcon()} +${e.mana}</span>`); }
+      if (e.burn){ bits.push(`<span class="hit">🩸 −${e.burn} ${manaIcon()}</span>`); }
       scMsg(`🪤 ${bits.join(" · ")}`); CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b>`);
       shakeBoard();
       await sleep(1800);
@@ -1333,21 +1387,28 @@ function cardStats(id){
   const c = CARDS[id], s = [];
   if (c.kind === "attack"){
     s.push(`<span class="st dmg">⚔️ ${c.dmg}</span>`);
+    s.push(`<span class="st el">${(c.el||[]).map(glyph).join("")}</span>`);
   } else if (c.kind === "shield"){
-    if (c.blocks) s.push(`<span class="st">🛡️ Block</span>`);
+    s.push(`<span class="st">🛡️ Block ${ELNAME[c.el[0]]}</span>`);
+    s.push(`<span class="st">${manaIcon()} +2</span>`);
+  } else if (c.kind === "spell"){
     if (c.heal) s.push(`<span class="st heal">💚 ${c.heal}</span>`);
-    if (c.mana) s.push(`<span class="st">${manaIcon()} +${c.mana}</span>`);
+    if (c.empower) s.push(`<span class="st dmg">✨ +${c.amt} ${ELNAME[c.empower]}</span>`);
+    if (c.burn) s.push(`<span class="st">🩸 −${c.burn} ${manaIcon()}</span>`);
+  } else if (c.kind === "landscape"){
+    s.push(`<span class="st el">${glyph(c.terrain)}</span>`);
+    s.push(`<span class="st land">+1 ${ELNAME[c.terrain]} dmg</span>`);
   } else if (c.kind === "trap"){
     const t = c.trap || {};
     if (t.retaliate) s.push(`<span class="st dmg">💥 ${t.retaliate}</span>`);
-    if (t.heal) s.push(`<span class="st heal">💚 ${t.heal}</span>`);
-    if (t.mana) s.push(`<span class="st">${manaIcon()} +${t.mana}</span>`);
+    if (t.burn) s.push(`<span class="st">🩸 −${t.burn} ${manaIcon()}</span>`);
+    s.push(`<span class="st cond">🎯 ${c.cond}</span>`);
   }
-  return artText(s.join("")); // convert ⚔️ 🛡️ 💚 💥 into drop-in art
+  return artText(s.join("")); // convert ⚔️ 🛡️ 💚 💥 ✨ into drop-in art
 }
 function bigCardHTML(id){
   const c = CARDS[id]; if (!c) return "";
-  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "trap" ? "Trap" : "Element";
+  const kindName = c.kind === "attack" ? "Attack" : c.kind === "shield" ? "Defense" : c.kind === "spell" ? "Spell" : c.kind === "landscape" ? "Landscape" : c.kind === "trap" ? "Trap" : "Element";
   return `<div class="bigcard ${c.kind}">` +
     `<div class="bc-bg"></div>` +      // optional card-background art (img/cardbg-<kind>.png) — invisible until added
     `<div class="bc-body">` +
@@ -1388,10 +1449,12 @@ const scBg = (slot) => (SKINS[slot === myslot ? ((profile && profile.cardSkin) |
 function showcaseCard(id, ownerSlot){
   if (!CARDS[id]) return;
   const layer = scLayer(), you = ownerSlot === myslot;
-  const k = CARDS[id].kind, act = k === "attack" ? "ATTACK" : k === "shield" ? "DEFENSE" : "TRAP";
+  const LBL = { attack:"ATTACK", shield:"DEFENSE", spell:"SPELL", landscape:"LANDSCAPE", trap:"TRAP" };
+  const k = CARDS[id].kind, act = LBL[k] || "CARD";
   const who = you ? "YOUR" : esc(foeName).toUpperCase() + "'S";
   const dir = k === "attack" ? (you ? "up" : "down") : "pop"; // attacks travel toward the target; others pop in place
-  layer.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${who} ${act} ${you ? "↑" : "↓"}</div>` +
+  const arrow = k === "attack" ? (you ? " ↑" : " ↓") : ""; // only attacks travel, so only they get a direction arrow
+  layer.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${who} ${act}${arrow}</div>` +
     `<div class="sc-card ${dir}">${bigCardHTML(id)}</div>`;
   const bc = layer.querySelector(".sc-card .bigcard"); if (bc) bc.style.setProperty("--cardbg", scBg(ownerSlot));
   clearTimeout(showcaseTimer);
@@ -1438,8 +1501,16 @@ function renderSheet(){
   $("sheettitle").innerHTML = artText("📖 Recipe Book");
   const tile = (id) => { const c = CARDS[id];
     return `<div class="booktile ${c.kind}" data-card="${id}"><span class="bt-art">${glyph(id)}</span><span class="bt-nm">${c.name}</span></div>`; };
-  let html = `<p class="sheetnote" style="margin-top:0">Tap a card to see it full-size — art, stats and recipe are all on the card.</p>`;
-  for (const [label, kind] of [["Attacks","attack"],["Defenses","shield"],["Traps","trap"]]){
+  let html = `<div class="lawbox">` +
+    `<b>The Law of Elements</b> — a recipe's shape decides its type:` +
+    `<div class="lawrow"><span>${glyph("fire")}+${glyph("fire")}</span> matching pair → <b class="k-shield">Defense</b></div>` +
+    `<div class="lawrow"><span>${glyph("fire")}+${glyph("earth")}</span> mixed pair → <b class="k-attack">Attack</b></div>` +
+    `<div class="lawrow"><span>${glyph("fire")}+${glyph("fire")}+${glyph("fire")}</span> pure triple → <b class="k-land">Landscape</b></div>` +
+    `<div class="lawrow"><span>${glyph("fire")}+${glyph("fire")}+${glyph("air")}</span> pair + catalyst → <b class="k-spell">Spell</b></div>` +
+    `<div class="lawrow"><span>${glyph("fire")}+${glyph("water")}+${glyph("earth")}</span> all different → <b class="k-trap">Trap</b></div>` +
+    `</div>` +
+    `<p class="sheetnote">Tap a card to see it full-size — art, stats and recipe are all on the card.</p>`;
+  for (const [label, kind] of [["🔴 Attacks","attack"],["🔵 Defenses","shield"],["🟡 Spells","spell"],["🟣 Landscapes","landscape"],["🟢 Traps","trap"]]){
     const ids = Object.keys(CARDS).filter((id) => CARDS[id].kind === kind);
     html += `<h3>${label}</h3><div class="bookgrid">${ids.map(tile).join("")}</div>`;
   }
@@ -1491,6 +1562,14 @@ $("lb").onclick = openLeaderboard;
 
 // ---- patch notes (League-style changelog) ----
 const PATCH_NOTES = [
+  { v:"2.0", date:"Sep 25", title:"The Law of Elements", notes:[
+    ["New", "🧪 Every card is now built from 🔥💧🌍💨 by one rule: <b>matching pair→Defense, mixed pair→Attack, pure triple→Landscape, pair+catalyst→Spell, all-different→Trap.</b>"],
+    ["New", "🟡 <b>Spells</b> — a yellow instant type. Renewal heals; Ember/Tide/Stone/Wind rites give your next attack of that element +2; Siphon burns enemy mana."],
+    ["New", "🟣 <b>Landscapes</b> — a purple terrain type. One shared slot; +1 to ALL damage of its element (both players) until someone reshapes it."],
+    ["Change", "🛡️ <b>Defenses no longer heal.</b> A defense blocks any attack sharing its element, and a block charges you <b>+2 mana</b> — the only ramp, so it's tied to being attacked."],
+    ["Change", "🟢 <b>Traps are conditional</b> now — they spring only when their trigger happens (an expensive attack, a heal, your low HP, or the enemy banking mana)."],
+    ["Remove", "🕯️ Hearth & Dew (the proactive mana generators) are gone — no more snowballing into infinite mana."],
+  ]},
   { v:"1.7", date:"Sep 24", title:"Cleaner Combat", notes:[
     ["Remove", "🌀 Element disabling is gone — a 1-round disable that a cleanse only fixed next turn was pointless."],
     ["Nerf", "💚 Healing across the board is much smaller now."],
