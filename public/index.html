@@ -201,14 +201,14 @@
   .fighter.droptarget{outline:2px dashed var(--accent);outline-offset:2px;background:var(--panel2)}
   body.dragging, body.dragging *{user-select:none!important;-webkit-user-select:none!important;cursor:grabbing!important}
   /* proper (LoR-style) card face — used by the hover preview and the drag ghost */
-  .bigcard{position:relative;width:172px;box-sizing:border-box;padding:9px 9px 8px;border-radius:16px;text-align:center;color:var(--ink);
+  .bigcard{position:relative;width:172px;box-sizing:border-box;padding:15px 15px 18px;border-radius:14px;text-align:center;color:var(--ink);
     font-family:var(--body);background:linear-gradient(165deg,var(--panel2),var(--panel));border:2px solid var(--line);
     box-shadow:0 12px 34px rgba(0,0,0,.55)}
   .bigcard.attack{border-color:var(--foe)} .bigcard.shield{border-color:var(--shield)} .bigcard.trap{border-color:var(--trap)}
-  .bigcard .bc-body{position:relative;z-index:1}       /* content sits above the background art */
+  .bigcard .bc-body{position:relative;z-index:1}       /* content sits above the background art, inside the frame */
   /* optional card-BACKGROUND art — drop img/cardbg-attack.png / -shield / -trap (172x230); invisible until then */
-  .bigcard .bc-bg{position:absolute;inset:0;border-radius:14px;z-index:0;pointer-events:none;
-    background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.55}
+  .bigcard .bc-bg{position:absolute;inset:0;border-radius:12px;z-index:0;pointer-events:none;
+    background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.7}
   .bigcard.attack .bc-bg{background-image:url(img/cardbg-attack.png)}
   .bigcard.shield .bc-bg{background-image:url(img/cardbg-shield.png)}
   .bigcard.trap   .bc-bg{background-image:url(img/cardbg-trap.png)}

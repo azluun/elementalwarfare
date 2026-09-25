@@ -57,17 +57,13 @@ Shown next to ratings everywhere. Small (128px).
 - [ ] tier-wood · [ ] tier-bronze · [ ] tier-silver · [ ] tier-gold
 - [ ] tier-platinum · [ ] tier-diamond · [ ] tier-champion
 
-### 3. Card border / frame art — drop straight into `public/img/`
-A decorative frame overlaid on the big card (hover / drag / reveal). **Transparent centre**, edges only.
-Size **172 × 230 px**. One per card type; add only the ones you want.
+### 3. Card border / frame art — ✅ DONE
+Ornate per-type frames (172×230, transparent centre) overlay every big card.
+`frame-attack.png` · `frame-shield.png` · `frame-trap.png`
 
-- [ ] `frame-attack.png` · [ ] `frame-shield.png` · [ ] `frame-trap.png`
-
-### 4. Card background art — drop straight into `public/img/`
-A texture shown *behind* the card content (rendered at ~55% opacity so text stays readable).
-Size **172 × 230 px**. One per card type.
-
-- [ ] `cardbg-attack.png` · [ ] `cardbg-shield.png` · [ ] `cardbg-trap.png`
+### 4. Card background art — ✅ DONE
+Per-type textures behind the card content (~70% opacity).
+`cardbg-attack.png` · `cardbg-shield.png` · `cardbg-trap.png`
 
 ---
 
