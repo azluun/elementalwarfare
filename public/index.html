@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Elemental Duel</title>
+<!-- installable PWA -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1310">
+<link rel="icon" type="image/png" sizes="192x192" href="/img/app-icon-192.png">
+<link rel="apple-touch-icon" href="/img/app-icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Elemental Duel">
 <style>
   :root{
     --bg:#0f1310; --panel:#182019; --panel2:#20291f; --line:#2c3828;
@@ -738,6 +747,19 @@ const $ = (id) => document.getElementById(id);
     urls.forEach((u) => { const im = new Image(); im.onload = bump; im.onerror = bump; im.src = u; }); // onerror still counts
   }).catch(() => { clearTimeout(safety); finish(); });
 })();
+// ---- PWA: register the service worker, and offer an in-app Install button when the browser allows it ----
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+let deferredInstall = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; showInstallBtn(); });
+window.addEventListener("appinstalled", () => { const b = $("installbtn"); if (b) b.remove(); deferredInstall = null; });
+function showInstallBtn(){
+  if ($("installbtn") || !deferredInstall) return;
+  const b = document.createElement("button");
+  b.id = "installbtn"; b.className = "px sm"; b.textContent = "📲 Install";
+  b.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:9000";
+  b.onclick = async () => { b.disabled = true; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch(e){} deferredInstall = null; b.remove(); };
+  document.body.appendChild(b);
+}
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); // names go through innerHTML
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();

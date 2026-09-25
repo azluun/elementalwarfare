@@ -16,7 +16,7 @@ function imgManifest() {
   catch { _imgManifest = []; }
   return _imgManifest;
 }
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif", ".json": "application/json", ".webmanifest": "application/manifest+json" };
 
 // --- Google Sign-In (optional): if no client id is configured, the game runs guest-only ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
