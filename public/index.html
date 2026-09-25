@@ -235,19 +235,32 @@
   .bigcard .bc-recipe{font-size:9.5px;color:var(--soft);opacity:.85;border-top:1px solid var(--line);margin-top:7px;padding-top:5px}
   #cardpreview{position:fixed;z-index:60;pointer-events:none;display:none;animation:cardpop .12s ease-out}
   @keyframes cardpop{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
-  /* reveal showcase: the attack card leaps to the middle of the screen for a beat */
-  #showcase{position:fixed;left:50%;top:44%;z-index:70;pointer-events:none;display:none;
-    transform:translate(-50%,-50%) scale(.55) rotate(-6deg);opacity:0;
-    transition:opacity .16s ease,transform .3s cubic-bezier(.2,1.35,.4,1)}
-  #showcase.in{opacity:1;transform:translate(-50%,-50%) scale(1.25) rotate(0)}
-  #showcase .bigcard{box-shadow:0 20px 60px rgba(0,0,0,.72)}
-  #showcase .sc-owner{position:absolute;top:-24px;left:0;right:0;text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em}
-  /* the blocking shield flies in from the side and lands on top of the attack card */
-  #showcase .sc-block{position:absolute;left:0;top:0;width:100%;
-    transform:translate(165px,-185px) scale(.5) rotate(34deg);opacity:0;
-    transition:transform .52s cubic-bezier(.2,1.25,.35,1),opacity .3s ease}
-  #showcase .sc-block.land{transform:translate(16px,20px) scale(1) rotate(-8deg);opacity:1}
-  #showcase .sc-block .bigcard{box-shadow:0 12px 34px rgba(0,0,0,.6)}
+  /* reveal: a dimmed stage where each card DASHES in its attack direction (up = at the enemy, down = at you) */
+  #showcase{position:fixed;inset:0;z-index:70;pointer-events:none;display:none;opacity:0;transition:opacity .2s ease;
+    background:radial-gradient(circle at 50% 46%,rgba(8,10,7,.34) 0%,rgba(8,10,7,.62) 55%,rgba(8,10,7,.82) 100%)}
+  #showcase.in{opacity:1}
+  #showcase .sc-owner{position:absolute;left:0;right:0;top:15%;text-align:center;font-size:13px;font-weight:800;letter-spacing:.14em;
+    opacity:0;transition:opacity .25s ease .05s} #showcase.in .sc-owner{opacity:1}
+  #showcase .sc-msg{position:absolute;left:0;right:0;top:71%;text-align:center;font-family:var(--dsp);font-size:26px;font-weight:800;
+    color:var(--ink);text-shadow:0 2px 10px rgba(0,0,0,.85);opacity:0;transition:opacity .18s ease}
+  #showcase.in .sc-msg{opacity:1}
+  #showcase .sc-msg .hit{color:var(--foe)} #showcase .sc-msg .blk{color:var(--shield)} #showcase .sc-msg .heal,#showcase .sc-msg .you{color:var(--you)}
+  #showcase .sc-card{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);will-change:transform,opacity}
+  #showcase .sc-card .bigcard{transform:scale(.98);box-shadow:0 18px 52px rgba(0,0,0,.72)}
+  @keyframes dashUp{0%{opacity:0;transform:translate(-50%,90px) scale(.7)}42%{opacity:1;transform:translate(-50%,6px) scale(1)}62%{transform:translate(-50%,-34px) scale(1.04)}100%{opacity:1;transform:translate(-50%,-16px) scale(1)}}
+  @keyframes dashDown{0%{opacity:0;transform:translate(-50%,-90px) scale(.7)}42%{opacity:1;transform:translate(-50%,-6px) scale(1)}62%{transform:translate(-50%,34px) scale(1.04)}100%{opacity:1;transform:translate(-50%,16px) scale(1)}}
+  @keyframes dashPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.62)}70%{transform:translate(-50%,-50%) scale(1.05)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  #showcase .sc-card.up{animation:dashUp .52s cubic-bezier(.2,.85,.3,1) forwards}
+  #showcase .sc-card.down{animation:dashDown .52s cubic-bezier(.2,.85,.3,1) forwards}
+  #showcase .sc-card.pop{animation:dashPop .34s cubic-bezier(.2,1.3,.4,1) forwards}
+  #showcase .out{animation:none!important;opacity:0!important;transition:opacity .22s ease}
+  /* the blocking shield SLAMS on top of the attack card (higher z so it's never hidden), from the defender's side */
+  #showcase .sc-block{position:absolute;left:50%;top:46%;z-index:6;transform:translate(-50%,-50%);will-change:transform,opacity}
+  #showcase .sc-block .bigcard{transform:scale(.98);box-shadow:0 14px 40px rgba(0,0,0,.72)}
+  @keyframes slamFromBottom{0%{opacity:0;transform:translate(-46%,120%) scale(.82) rotate(-12deg)}70%{opacity:1;transform:translate(-42%,-30%) scale(1.03) rotate(7deg)}100%{opacity:1;transform:translate(-42%,-34%) scale(1) rotate(8deg)}}
+  @keyframes slamFromTop{0%{opacity:0;transform:translate(-46%,-220%) scale(.82) rotate(12deg)}70%{opacity:1;transform:translate(-42%,-38%) scale(1.03) rotate(-7deg)}100%{opacity:1;transform:translate(-42%,-34%) scale(1) rotate(-8deg)}}
+  #showcase .sc-block.fromBottom{animation:slamFromBottom .44s cubic-bezier(.2,1.05,.35,1) forwards}
+  #showcase .sc-block.fromTop{animation:slamFromTop .44s cubic-bezier(.2,1.05,.35,1) forwards}
   .dragghost.big{background:none;border:none;box-shadow:none;padding:0;transform:translate(-50%,-50%) rotate(-4deg) scale(1.03)}
 
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
@@ -1268,40 +1281,43 @@ async function startReveal(m){
   await sleep(320);
 
   for (const e of acts){
-    if (e.t === "defense"){                                        // a shield that heals / restores / cleanses
-      showcaseCard(e.card, e.who); await sleep(750);
+    if (e.t === "defense"){                                        // a shield that heals / grants mana
+      showcaseCard(e.card, e.who); await sleep(620);               // let it pop in first
       const bits = [];
-      if (e.heal > 0){ bits.push(`💚 +${e.heal}`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
-      if (e.mana > 0) bits.push(`${manaIcon()} +${e.mana} mana`);
-      CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name} — ${bits.join(" · ")}`);
-      await sleep(1300);
+      if (e.heal > 0){ bits.push(`<span class="heal">💚 +${e.heal}</span>`); hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); }
+      if (e.mana > 0) bits.push(`<span class="you">${manaIcon()} +${e.mana}</span>`);
+      scMsg(bits.join(" · ")); CLASH(`${glyph(e.card)} ${sideName(e.who)}'s ${CARDS[e.card].name}`);
+      await sleep(1800);
     }
     else if (e.t === "attack"){
       const tgt = 1 - e.who;
-      showcaseCard(e.card, e.who); // the attack leaps to centre-screen in the owner's skin
-      await sleep(800);
+      showcaseCard(e.card, e.who);                                 // the attack DASHES toward its target
+      await sleep(560);                                            // arrives, then the hit lands
       if (e.blocked){
-        const shieldId = CARDS[e.card].counter;                    // reveal the shield that stopped it
-        if (CARDS[shieldId]) flyShieldOver(shieldId, tgt);         // the shield flies over and lands on the attack
+        const shieldId = CARDS[e.card].counter;
+        if (CARDS[shieldId]) flyShieldOver(shieldId, tgt);         // shield slams on top from the defender's side
+        await sleep(360);
+        scMsg(`<span class="blk">🛡️ BLOCKED</span>`); shakeBoard();
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} → <span class="blk">🛡️ ${CARDS[shieldId] ? CARDS[shieldId].name : "blocked"}</span>`);
-        await sleep(1500);
+        await sleep(1700);
       }
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
+        scMsg(`<span class="hit">💥 −${e.dmg}</span>`);
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>`);
         dmgFloat(tgt, e.dmg); shakeBoard(); if (tgt === myslot) flashHit();
-        await sleep(1300);
+        await sleep(1800);
       }
     }
     else if (e.t === "trap"){                                      // only sprung traps reach here
       const c = CARDS[e.card], bits = [], tgt = 1 - e.who;
-      showcaseCard(e.card, e.who); await sleep(800);
-      if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
-      if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`💚 +${e.heal}`); }
-      if (e.mana){ bits.push(`${manaIcon()} +${e.mana} mana`); }
-      CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b> ${bits.join(" · ")}`);
+      showcaseCard(e.card, e.who); await sleep(620);
+      if (e.retaliate){ hp[tgt] = Math.max(0, hp[tgt] - e.retaliate); revHp(tgt, hp[tgt]); dmgFloat(tgt, e.retaliate); if (tgt === myslot) flashHit(); bits.push(`<span class="hit">💥 −${e.retaliate}</span>`); }
+      if (e.heal){ hp[e.who] = Math.min(30, hp[e.who] + e.heal); revHp(e.who, hp[e.who]); bits.push(`<span class="heal">💚 +${e.heal}</span>`); }
+      if (e.mana){ bits.push(`<span class="you">${manaIcon()} +${e.mana}</span>`); }
+      scMsg(`🪤 ${bits.join(" · ")}`); CLASH(`${glyph(e.card)} ${c.name} <b>springs!</b>`);
       shakeBoard();
-      await sleep(1300);
+      await sleep(1800);
     }
   }
   await sleep(500);
@@ -1365,37 +1381,40 @@ function positionPreview(cx, topY){
   previewEl.style.left = left + "px"; previewEl.style.top = top + "px";
 }
 function hidePreview(){ if (previewEl) previewEl.style.display = "none"; }
-// reveal drama: throw the big card into the middle of the screen for a beat, painted with the OWNER's skin
+// reveal drama: a card DASHES in its attack direction on a dimmed stage, painted with the OWNER's skin
 let showcaseEl = null, showcaseTimer = null;
+const scLayer = () => { if (!showcaseEl){ showcaseEl = document.createElement("div"); showcaseEl.id = "showcase"; document.body.appendChild(showcaseEl); } return showcaseEl; };
+const scBg = (slot) => (SKINS[slot === myslot ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default")] || SKINS.default).bg;
 function showcaseCard(id, ownerSlot){
   if (!CARDS[id]) return;
-  if (!showcaseEl){ showcaseEl = document.createElement("div"); showcaseEl.id = "showcase"; document.body.appendChild(showcaseEl); }
-  const you = ownerSlot === myslot;
-  const skinId = you ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default");
-  const bg = (SKINS[skinId] || SKINS.default).bg;
+  const layer = scLayer(), you = ownerSlot === myslot;
   const k = CARDS[id].kind, act = k === "attack" ? "ATTACK" : k === "shield" ? "DEFENSE" : "TRAP";
   const who = you ? "YOUR" : esc(foeName).toUpperCase() + "'S";
-  showcaseEl.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${who} ${act}</div>${bigCardHTML(id)}`;
-  const card = showcaseEl.querySelector(".bigcard");
-  if (card) card.style.setProperty("--cardbg", bg); // the art panel takes the owner's skin colour
+  const dir = k === "attack" ? (you ? "up" : "down") : "pop"; // attacks travel toward the target; others pop in place
+  layer.innerHTML = `<div class="sc-owner" style="color:${you ? "var(--you)" : "var(--foe)"}">${who} ${act} ${you ? "↑" : "↓"}</div>` +
+    `<div class="sc-card ${dir}">${bigCardHTML(id)}</div>`;
+  const bc = layer.querySelector(".sc-card .bigcard"); if (bc) bc.style.setProperty("--cardbg", scBg(ownerSlot));
   clearTimeout(showcaseTimer);
-  showcaseEl.style.display = "block";
-  showcaseEl.classList.remove("in");
-  requestAnimationFrame(() => requestAnimationFrame(() => showcaseEl.classList.add("in")));
-  showcaseTimer = setTimeout(() => hideShowcase(), 2400); // hold the card on screen a good beat
+  layer.style.display = "block"; layer.classList.remove("in");
+  requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add("in")));
+  showcaseTimer = setTimeout(() => hideShowcase(), 3200);
 }
-// a shield card flies in from the defender's side and lands on top of the attack card, "covering" it
-function flyShieldOver(id, ownerSlot){
+// the effect readout under the card (−dmg / BLOCKED / +heal), on the dimmed stage
+function scMsg(html){ if (!showcaseEl) return; let m = showcaseEl.querySelector(".sc-msg"); if (!m){ m = document.createElement("div"); m.className = "sc-msg"; showcaseEl.appendChild(m); } m.innerHTML = artText(html); }
+// the blocking shield SLAMS onto the attack card from the DEFENDER's side (and sits on top)
+function flyShieldOver(id, defenderSlot){
   if (!showcaseEl || !CARDS[id]) return;
-  const you = ownerSlot === myslot;
-  const bg = (SKINS[you ? ((profile && profile.cardSkin) || "default") : (foeSkin || "default")] || SKINS.default).bg;
-  const wrap = document.createElement("div"); wrap.className = "sc-block";
+  const wrap = document.createElement("div"); wrap.className = "sc-block " + (defenderSlot === myslot ? "fromBottom" : "fromTop");
   wrap.innerHTML = bigCardHTML(id);
-  const card = wrap.querySelector(".bigcard"); if (card) card.style.setProperty("--cardbg", bg);
+  const bc = wrap.querySelector(".bigcard"); if (bc) bc.style.setProperty("--cardbg", scBg(defenderSlot));
   showcaseEl.appendChild(wrap);
-  requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add("land")));
 }
-function hideShowcase(){ if (!showcaseEl) return; showcaseEl.classList.remove("in"); clearTimeout(showcaseTimer); showcaseTimer = setTimeout(() => { if (showcaseEl) showcaseEl.style.display = "none"; }, 220); }
+function hideShowcase(){
+  if (!showcaseEl) return; clearTimeout(showcaseTimer);
+  showcaseEl.classList.remove("in");
+  showcaseEl.querySelectorAll(".sc-card,.sc-block,.sc-msg").forEach((c) => c.classList.add("out"));
+  const el = showcaseEl; showcaseTimer = setTimeout(() => { if (el){ el.style.display = "none"; el.innerHTML = ""; } }, 240);
+}
 if (HOVER){
   document.addEventListener("mouseover", (e) => {
     if (drag) return;
