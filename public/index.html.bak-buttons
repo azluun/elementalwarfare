@@ -447,47 +447,6 @@
     #coach{padding:11px 13px calc(11px + env(safe-area-inset-bottom,0px))}
     #coachtext{font-size:13px;line-height:1.35}
   }
-/* ===== Pixel buttons (9-slice) =====================================
-   Drop the btn-*.png files into public/img/, paste this block into the
-   <style> of index.html (after the base `button{...}` rule).
-
-   Usage:  <button class="px">…</button>              dark (default)
-           <button class="px pri">…</button>          green (Find match)
-           <button class="px danger|gold|spell|land">
-   Scale:  every button stretches to any width/height automatically.
-           Bevel thickness follows --px (default 2 = 2 screen px per art px):
-           <button class="px pri" style="--px:3">  → chunkier, for hero buttons
-   ================================================================== */
-button.px{
-  --px:2;
-  --skin:url(img/btn-default.png); --skin-h:url(img/btn-default-hover.png); --skin-p:url(img/btn-default-press.png);
-  --ink-c:var(--ink);
-  background:none; border-radius:0; color:var(--ink-c);
-  border-style:solid; border-color:transparent;
-  border-width:calc(var(--px) * 5px);
-  border-image:var(--skin) 5 fill / calc(var(--px) * 5px) stretch;
-  image-rendering:pixelated;
-  padding:calc(var(--px) * 1px) calc(var(--px) * 3px) calc(var(--px) * 2px);
-  line-height:1.15;
-  text-shadow:0 1px 0 rgba(0,0,0,.35);
-  transition:transform .07s, filter .15s;
-}
-button.px:hover:not(:disabled){ background:none; border-image-source:var(--skin-h) }
-button.px:active:not(:disabled){ border-image-source:var(--skin-p); transform:translateY(calc(var(--px) * 1px)) }
-button.px:disabled{ filter:grayscale(.8) brightness(.7); opacity:.7 }
-button.px:focus-visible{ outline:2px solid var(--amber); outline-offset:2px }
-
-/* colour variants — dark text on bright skins, like your current Find match */
-button.px.pri   { --skin:url(img/btn-primary.png); --skin-h:url(img/btn-primary-hover.png); --skin-p:url(img/btn-primary-press.png); --ink-c:#0e120a; text-shadow:0 1px 0 rgba(255,255,255,.25) }
-button.px.danger{ --skin:url(img/btn-danger.png);  --skin-h:url(img/btn-danger-hover.png);  --skin-p:url(img/btn-danger-press.png) }
-button.px.gold  { --skin:url(img/btn-gold.png);    --skin-h:url(img/btn-gold-hover.png);    --skin-p:url(img/btn-gold-press.png);    --ink-c:#1a1206; text-shadow:none }
-button.px.spell { --skin:url(img/btn-spell.png);   --skin-h:url(img/btn-spell-hover.png);   --skin-p:url(img/btn-spell-press.png);   --ink-c:#1a1606; text-shadow:none }
-button.px.land  { --skin:url(img/btn-land.png);    --skin-h:url(img/btn-land-hover.png);    --skin-p:url(img/btn-land-press.png) }
-
-/* size helpers (optional) */
-button.px.sm{ --px:2; font-size:12px }
-button.px.lg{ --px:3; font-size:16px }
-
 </style>
 </head>
 <body>
@@ -511,25 +470,25 @@ button.px.lg{ --px:3; font-size:16px }
       <div id="signinnote" style="font-size:13px;color:var(--soft);text-align:center">Sign in with Google to play.</div>
     </div>
     <div id="menu" hidden style="display:flex;flex-direction:column;gap:14px">
-      <button class="px pri lg" id="quick">⚔️ Find match</button>
-      <button class="px" id="bot" style="font-size:14px">🤖 Play vs Bot</button>
+      <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
+      <button id="bot" style="padding:11px;font-size:14px">🤖 Play vs Bot</button>
       <div style="text-align:center;color:var(--soft);font-size:12px">— or play a specific friend —</div>
       <div><label for="room">Room code</label><input id="room" maxlength="6" placeholder="you will see your code here" style="text-transform:uppercase"></div>
       <div class="row">
-        <button class="px" id="create">Create room</button>
-        <button class="px" id="joinbtn">Join room</button>
+        <button id="create">Create room</button>
+        <button id="joinbtn">Join room</button>
       </div>
       <div class="status" id="status"></div>
       <div class="invite" id="invite" hidden>
         Send this link to your friend:
         <code id="invitelink"></code>
       </div>
-      <button class="px danger" id="cancelsearch" hidden>✕ Cancel / Back</button>
+      <button id="cancelsearch" hidden style="padding:8px;font-size:13px;border-color:var(--foe);color:var(--foe)">✕ Cancel / Back</button>
     </div>
-    <button class="px" id="lb">🏆 Arena Leaderboard</button>
-    <button class="px" id="book">📖 Recipe Book — all recipes &amp; counters</button>
-    <button class="px" id="howto">❔ How to play</button>
-    <button class="px" id="patch">📜 Patch Notes</button>
+    <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
+    <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
+    <button id="howto" style="padding:8px;font-size:13px">❔ How to play</button>
+    <button id="patch" style="padding:8px;font-size:13px">📜 Patch Notes</button>
   </div>
 
   <!-- ARENA -->
@@ -593,7 +552,7 @@ button.px.lg{ --px:3; font-size:16px }
     <p id="nmsub" style="font-size:13px;color:var(--soft);margin:0">This is how other players will see you. Names are unique.</p>
     <input id="pnameinput" maxlength="16" placeholder="Player name">
     <p id="pnameerr" style="font-size:12px;color:var(--foe);margin:0;min-height:15px"></p>
-    <button class="px pri" id="pnamesave">Save &amp; continue</button>
+    <button class="pri" id="pnamesave" style="background:var(--accent);color:#0e120a;border-color:transparent">Save &amp; continue</button>
   </div>
 </div>
 
@@ -609,7 +568,7 @@ button.px.lg{ --px:3; font-size:16px }
   <h2 id="overtitle">—</h2>
   <p id="oversub" style="color:var(--soft)"></p>
   <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
-    <button id="rematch" class="px pri">Rematch</button>
+    <button id="rematch" class="pri" style="background:var(--accent);color:#0e120a;border-color:transparent">Rematch</button>
     <button id="tomenu">Back to menu</button>
   </div>
 </div></div>
