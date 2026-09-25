@@ -178,8 +178,8 @@
     image-rendering:pixelated;opacity:.32;transition:opacity .15s} /* mana orb pip; dim = spent */
   .apdots span.on{opacity:1}
   .apdots span.bank{box-shadow:0 0 0 2px var(--shield)} /* the one bankable mana */
-  #ready{background:var(--accent);color:#0e120a;border-color:transparent}
-  #ready:disabled{opacity:.4;background:var(--panel2);color:var(--ink)}
+  #ready{color:#0e120a}                 /* px pri paints the green pixel skin; keep only the dark ink */
+  #ready:disabled{opacity:.5}           /* px handles the grayed-out look */
   .craft.off{opacity:.45;pointer-events:none}
   .planstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:30px;
     background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:8px 12px}
@@ -496,7 +496,7 @@ button.px.lg{ --px:3; font-size:16px }
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
     <div style="display:flex;align-items:center;gap:8px">
       <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
-      <button id="forfeit" hidden style="padding:5px 10px;font-size:12px;border-color:var(--foe);color:var(--foe)">🏳 Forfeit</button>
+      <button id="forfeit" class="px danger sm" hidden>🏳 Forfeit</button>
       <button id="profilechip" hidden title="Profile & settings">
         <span class="pc-ava" id="chipava"></span>
         <span class="pc-txt"><span class="pc-name" id="chipname"></span><span class="pc-rank" id="chiprank"></span></span>
@@ -561,7 +561,7 @@ button.px.lg{ --px:3; font-size:16px }
       <span id="roundmsg">Round 1</span>
       <span id="timer"></span>
       <span class="apdots" id="apdots"></span>
-      <button id="ready">Ready</button>
+      <button id="ready" class="px pri">Ready</button>
     </div>
 
     <div class="craft" id="craft">
@@ -601,7 +601,7 @@ button.px.lg{ --px:3; font-size:16px }
   <span id="coachtext"></span>
   <span style="display:flex;gap:8px;align-items:center;white-space:nowrap">
     <button id="coachskip" style="background:none;border:none;color:var(--soft);font-size:12px;cursor:pointer;padding:2px">Skip</button>
-    <button id="coachnext" hidden>Continue</button>
+    <button id="coachnext" class="px pri" hidden>Continue</button>
   </span>
 </div>
 
@@ -610,7 +610,7 @@ button.px.lg{ --px:3; font-size:16px }
   <p id="oversub" style="color:var(--soft)"></p>
   <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
     <button id="rematch" class="px pri">Rematch</button>
-    <button id="tomenu">Back to menu</button>
+    <button id="tomenu" class="px">Back to menu</button>
   </div>
 </div></div>
 
@@ -1886,7 +1886,7 @@ function openSettings(){
       `<button data-s="rename">${ui("✏️")} Rename</button>` +
     `</div>` +
     (profile.dev ? `<button class="setwide" data-s="admin" style="border-color:#b98cff;color:#b98cff">${ui("🛠")} Dev: Profiles</button>` : "") +
-    `<button class="setwide" id="setsignout" style="border-color:var(--foe);color:var(--foe)">Sign out</button>`;
+    `<button class="setwide px danger" id="setsignout">Sign out</button>`;
   $("sheettitle").innerHTML = artText("⚙️ Profile & Settings");
   $("sheetbody").innerHTML = body;
   const acts = { cosmetics: openCosmetics, shop: openShop, icons: openIconShop, namecolor: openColorShop, back: openBackShop, rename: openRename, admin: openAdmin };
