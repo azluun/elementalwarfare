@@ -8,6 +8,14 @@ const store = require("./storage");
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, "public");
+// list every image in public/img (cached) so the client can preload them all on boot
+let _imgManifest = null;
+function imgManifest() {
+  if (_imgManifest) return _imgManifest;
+  try { _imgManifest = fs.readdirSync(path.join(PUB, "img")).filter((f) => /\.(png|webp|jpg|jpeg|gif|svg)$/i.test(f)); }
+  catch { _imgManifest = []; }
+  return _imgManifest;
+}
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif" };
 
 // --- Google Sign-In (optional): if no client id is configured, the game runs guest-only ---
@@ -184,6 +192,7 @@ async function handleAdmin(req, res) {
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID, storage: store.mode, profiles: store.count() })); }
+  if (url === "/manifest") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-cache" }); return res.end(JSON.stringify({ img: imgManifest() })); }
   if (url === "/leaderboard") {
     const top = store.allProfiles().filter((p) => p.name)
       .sort((a, b) => (b.rating || 1000) - (a.rating || 1000)).slice(0, 20)
