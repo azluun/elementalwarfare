@@ -274,6 +274,31 @@
   @keyframes floatup{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-46px)}}
   .dmgfloat{position:absolute;left:50%;top:6px;font-family:var(--dsp);font-weight:700;font-size:28px;
     color:var(--foe);animation:floatup .8s ease-out forwards;pointer-events:none}
+  /* ---- polish animations ---- */
+  @keyframes riseIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+  .sheetbox{animation:riseIn .22s ease-out} .nmbox{animation:riseIn .2s ease-out}
+  .over .box{animation:riseIn .3s cubic-bezier(.2,1.25,.4,1)}
+  @keyframes tilePop{from{opacity:0;transform:translateY(9px) scale(.9)}to{opacity:1;transform:none}}
+  .booktile{animation:tilePop .28s ease-out both}
+  .booktile:nth-child(2){animation-delay:.04s} .booktile:nth-child(3){animation-delay:.08s}
+  .booktile:nth-child(4){animation-delay:.12s} .booktile:nth-child(5){animation-delay:.16s} .booktile:nth-child(6){animation-delay:.2s}
+  .setgrid button{animation:tilePop .26s ease-out both}
+  .setgrid button:nth-child(2){animation-delay:.04s} .setgrid button:nth-child(3){animation-delay:.08s}
+  .setgrid button:nth-child(4){animation-delay:.12s} .setgrid button:nth-child(5){animation-delay:.16s} .setgrid button:nth-child(6){animation-delay:.2s}
+  @keyframes hpbump{0%{transform:scale(1)}28%{transform:scale(1.4)}100%{transform:scale(1)}}
+  .bhpnum.bump{animation:hpbump .42s ease-out} .bhpnum{display:inline-block}
+  @keyframes healbump{0%{transform:scale(1);color:var(--ink)}28%{transform:scale(1.4);color:var(--you)}100%{transform:scale(1)}}
+  .bhpnum.heal{animation:healbump .5s ease-out}
+  @keyframes craftpop{0%{opacity:0;transform:scale(.55) translateY(8px)}62%{transform:scale(1.09)}100%{opacity:1;transform:none}}
+  .card.pop{animation:craftpop .34s ease-out}
+  @keyframes readyglow{0%,100%{box-shadow:0 0 0 0 rgba(84,180,131,.55)}50%{box-shadow:0 0 0 6px rgba(84,180,131,0)}}
+  .turnbar.mine #ready:not(:disabled){animation:readyglow 1.9s ease-in-out infinite}
+  @keyframes hitflash{0%{opacity:0}18%{opacity:.55}100%{opacity:0}}
+  #hitflash{position:fixed;inset:0;z-index:64;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 45%,transparent 42%,rgba(226,86,79,.5))}
+  #hitflash.on{animation:hitflash .42s ease-out}
+  .lobby>button:hover,.setgrid button:hover,#menu>.pri:hover{transform:translateY(-1px)}
+  .base:active{transform:scale(.9)} .booktile:active{transform:scale(.96)}
   .over{position:fixed;inset:0;background:rgba(8,10,7,.86);display:none;align-items:center;justify-content:center;padding:20px;z-index:21}
   /* cheat sheet / recipe book */
   .sheet{position:fixed;inset:0;background:rgba(8,10,7,.86);display:flex;align-items:center;justify-content:center;padding:16px;z-index:25}
@@ -475,6 +500,7 @@
 </div>
 
 <div class="reveal" id="reveal"></div>
+<div id="hitflash"></div>
 
 <div class="sheet" id="sheet" hidden>
   <div class="sheetbox">
@@ -992,7 +1018,7 @@ function craft(){
   inv[id] = (inv[id]||0) + 1;                // gain the new element
   discover(id);                              // remember this recipe for your Guide
   craftLog.push({ id, need: Object.assign({}, need) }); // remember it so this combine can be undone
-  apSpent++;
+  apSpent++; justCraftedId = id; // pop the new card in on the next render
   $("hint").textContent = `Crafted ${CARDS[id].name}! (−1 AP)`;
   clear(); updateUI();
   if (tutorialMode) tutOnState();
@@ -1023,7 +1049,7 @@ function renderInv(){
   ids.forEach(id => {
     const c = CARDS[id];
     const el = document.createElement("div");
-    el.className = "card " + c.kind;
+    el.className = "card " + c.kind + (id === justCraftedId ? " pop" : "");
     el.dataset.id = id;
     el.dataset.cardPreview = id; // hover (desktop) shows the full-size card
     el.title = "Click to add to the combiner";
@@ -1040,13 +1066,16 @@ function renderInv(){
     el.oncontextmenu = (e) => e.preventDefault(); // stop the long-press context menu on mobile
     h.appendChild(el);
   });
+  justCraftedId = null; // pop plays once
 }
+let justCraftedId = null, justStaged = false;
 function stage(id){
   const c = CARDS[id];
   if (!canAct() || !(inv[id] > 0)) return;
   if (c.kind === "trap" && plan.some((d) => d.k === "trap")){ $("hint").textContent = "Only one trap can be set per turn."; flash(); return; }
   inv[id]--; apSpent++;
   plan.push({ k: c.kind, card: id }); // kind is already "attack" | "shield"
+  justStaged = true;              // drop-in animate the newly set card
   updateUI();
   sendFieldCount();               // +card on the field → opponent sees a new back appear
   if (tutorialMode) tutOnState();
@@ -1130,12 +1159,14 @@ function renderPlan(){
   plan.forEach((d, idx) => {                 // this round's staged plays
     const c = CARDS[d.card];
     const t = document.createElement("div");
-    t.className = "setcard mine fresh " + d.k + posClass(d.k);
+    const last = justStaged && idx === plan.length - 1;   // only the just-played card drops in
+    t.className = "setcard mine fresh " + d.k + posClass(d.k) + (last ? " drop" : "");
     t.dataset.cardPreview = d.card; // hover / long-press to see the full card
     t.innerHTML = `<span class="sc-art">${glyph(d.card)}</span><span class="sc-nm">${c.name}</span>`;
     if (!locked){ const x=document.createElement("button"); x.className="rm"; x.textContent="✕"; x.title="recall"; x.onclick=()=>unstage(idx); t.appendChild(x); }
     p.appendChild(t);
   });
+  justStaged = false;
   if (!p.children.length) p.innerHTML = `<span class="fieldempty">Drag a card up here to set it — attack, trap or defense</span>`;
 }
 // the opponent's side — persistent set + this round's plays, all as oriented FACE-DOWN backs; never the identity
@@ -1203,11 +1234,14 @@ function dmgFloat(slot, dmg){
   const f = document.createElement("div"); f.className = "dmgfloat"; f.textContent = "−" + dmg;
   z.appendChild(f); setTimeout(() => f.remove(), 820);
 }
-function revHp(slot, val){ // update a badge's HP number + bar during the reveal
+function revHp(slot, val){ // update a badge's HP number + bar during the reveal, with a bump
   const you = slot === myslot;
-  const num = document.getElementById(you ? "myhp" : "foehp"); if (num) num.textContent = val;
+  const num = document.getElementById(you ? "myhp" : "foehp");
+  if (num){ const dmg = val < (+num.textContent || val); num.textContent = val; bump(num, dmg ? "bump" : "heal"); }
   const bar = document.getElementById(you ? "mybar" : "foebar"); if (bar) bar.style.width = (val / 30 * 100) + "%";
 }
+function bump(el, cls){ el.classList.remove("bump","heal"); void el.offsetWidth; el.classList.add(cls); }
+function flashHit(){ const f = $("hitflash"); if (!f) return; f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
 const CLASH = (html) => { $("clash").innerHTML = `<span id="clashmsg">${artText(html)}</span>`; };
 // the reveal now plays out ON the board: the set cards flip up in place, then each effect resolves with HP hits + shakes
 async function startReveal(m){
@@ -1255,7 +1289,7 @@ async function startReveal(m){
       else {
         hp[tgt] = Math.max(0, hp[tgt] - e.dmg); revHp(tgt, hp[tgt]);
         CLASH(`${glyph(e.card)} ${CARDS[e.card].name} <span class="hit">💥 −${e.dmg}</span>`);
-        dmgFloat(tgt, e.dmg); shakeBoard();
+        dmgFloat(tgt, e.dmg); shakeBoard(); if (tgt === myslot) flashHit();
         await sleep(1300);
       }
     }
