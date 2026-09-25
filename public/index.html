@@ -59,6 +59,26 @@
       radial-gradient(120% 78% at 50% 100%,rgba(84,180,131,.09),transparent 60%),var(--panel)}
   .board.droptarget{outline:2px dashed var(--accent);outline-offset:-3px}
   .board.hitshake{animation:shake .32s}
+  /* ===== Landscape terrain: theme the whole board when a landscape is in play ===== */
+  .board{transition:outline .12s,border-color .5s,box-shadow .5s,background .5s}
+  /* immediate colour theme (works with no art): tinted border, glow, and ambient wash per element */
+  .board[data-terrain]{border-width:2px;border-style:solid}
+  .board[data-terrain="fire"]{border-color:#e2564f;box-shadow:0 0 26px -6px rgba(226,86,79,.55),inset 0 0 90px -40px rgba(226,86,79,.7);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(226,86,79,.16),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(226,86,79,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="water"]{border-color:#4fb3c0;box-shadow:0 0 26px -6px rgba(79,179,192,.55),inset 0 0 90px -40px rgba(79,179,192,.7);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(79,179,192,.16),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(79,179,192,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="earth"]{border-color:#cf9b52;box-shadow:0 0 26px -6px rgba(207,155,82,.5),inset 0 0 90px -40px rgba(207,155,82,.65);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(207,155,82,.15),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(207,155,82,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="air"]{border-color:#9fb9c9;box-shadow:0 0 26px -6px rgba(159,185,201,.5),inset 0 0 90px -40px rgba(159,185,201,.6);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(159,185,201,.14),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(159,185,201,.09),transparent 62%),var(--panel)}
+  /* drop-in ORNATE FRAME art per element — add public/img/field-<element>.png (9-slice, transparent centre).
+     Invisible until the file exists; the colour theme above always shows. */
+  .board[data-terrain]::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+    border:solid transparent;border-width:26px;border-image-slice:26;border-image-repeat:round;image-rendering:pixelated}
+  .board[data-terrain="fire"]::after {border-image-source:url(img/field-fire.png)}
+  .board[data-terrain="water"]::after{border-image-source:url(img/field-water.png)}
+  .board[data-terrain="earth"]::after{border-image-source:url(img/field-earth.png)}
+  .board[data-terrain="air"]::after {border-image-source:url(img/field-air.png)}
   .hpbadge{position:absolute;left:8px;right:8px;display:flex;align-items:center;gap:8px;padding:5px 10px;z-index:3;
     background:rgba(16,19,16,.66);border:1px solid var(--line);border-radius:11px;backdrop-filter:blur(3px)}
   .hpbadge.foe{top:8px} .hpbadge.me{bottom:8px}
@@ -1058,7 +1078,10 @@ function applyPlayers(players){
 }
 // the shared terrain banner — reflects the one active landscape (or hides when there is none)
 function setTerrain(element, card){
-  const t = $("terrain"); if (!t) return;
+  const t = $("terrain"), board = $("field");
+  // theme the whole board around the active landscape (colour + drop-in field-<element>.png frame)
+  if (board){ if (element) board.dataset.terrain = element; else board.removeAttribute("data-terrain"); }
+  if (!t) return;
   if (!element){ t.hidden = true; t.innerHTML = ""; return; }
   const nm = (card && CARDS[card]) ? CARDS[card].name : (ELNAME[element] + " terrain");
   t.hidden = false;
