@@ -73,16 +73,15 @@ Legend: ✅ has art · ⬜ needs art (emoji fallback for now).
 |---|---|---|---|---|
 | ✅ | `riptide.png` | Riptide | Water/Earth/Air | 🫧 |
 | ✅ | `backdraft.png` | Backdraft | Fire/Earth/Air | 💥 |
-| ⬜ | `tempestsnare.png` | Tempest Snare | Fire/Water/Air | 🕸️ |
-| ⬜ | `quicksand.png` | Quicksand | Fire/Water/Earth | 🕳️ |
+| ✅ | `tempestsnare.png` | Tempest Snare | Fire/Water/Air | 🕸️ |
+| ✅ | `quicksand.png` | Quicksand | Fire/Water/Earth | 🕳️ |
 
 ---
 
-## Tally
-- **Have art:** 22 of 24 cards ✅ — plus all avatars (`icon-*`), tier badges (`tier-*`) and UI icons (`ui-*`).
+## Tally — 🎉 complete
+- **Cards:** 24 of 24 ✅ — every card has subject art.
 - **Frame + background:** all 5 types ✅
-- **Still need subject art:** 2 cards — `tempestsnare.png`, `quicksand.png`
+- **Also done:** all avatars (`icon-*`), tier badges (`tier-*`) and UI icons (`ui-*`).
 
-Sources live in `assets/*.jpg`; `python3 tools/artgen.py <id>` turns one into a trimmed
-transparent `public/img/<id>.png`. Add `assets/tempestsnare.jpg` + `assets/quicksand.jpg`
-and run it to finish the set.
+Nothing outstanding. To swap any art later: replace `assets/<id>.jpg` and run
+`python3 tools/artgen.py <id>` (subjects), or drop a new frame/background PNG straight in.

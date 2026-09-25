@@ -59,6 +59,26 @@
       radial-gradient(120% 78% at 50% 100%,rgba(84,180,131,.09),transparent 60%),var(--panel)}
   .board.droptarget{outline:2px dashed var(--accent);outline-offset:-3px}
   .board.hitshake{animation:shake .32s}
+  /* ===== Landscape terrain: theme the whole board when a landscape is in play ===== */
+  .board{transition:outline .12s,border-color .5s,box-shadow .5s,background .5s}
+  /* immediate colour theme (works with no art): tinted border, glow, and ambient wash per element */
+  .board[data-terrain]{border-width:2px;border-style:solid}
+  .board[data-terrain="fire"]{border-color:#e2564f;box-shadow:0 0 26px -6px rgba(226,86,79,.55),inset 0 0 90px -40px rgba(226,86,79,.7);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(226,86,79,.16),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(226,86,79,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="water"]{border-color:#4fb3c0;box-shadow:0 0 26px -6px rgba(79,179,192,.55),inset 0 0 90px -40px rgba(79,179,192,.7);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(79,179,192,.16),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(79,179,192,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="earth"]{border-color:#cf9b52;box-shadow:0 0 26px -6px rgba(207,155,82,.5),inset 0 0 90px -40px rgba(207,155,82,.65);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(207,155,82,.15),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(207,155,82,.10),transparent 62%),var(--panel)}
+  .board[data-terrain="air"]{border-color:#9fb9c9;box-shadow:0 0 26px -6px rgba(159,185,201,.5),inset 0 0 90px -40px rgba(159,185,201,.6);
+    background:radial-gradient(120% 82% at 50% 0%,rgba(159,185,201,.14),transparent 60%),radial-gradient(120% 78% at 50% 100%,rgba(159,185,201,.09),transparent 62%),var(--panel)}
+  /* drop-in ORNATE FRAME art per element — add public/img/field-<element>.png (9-slice, transparent centre).
+     Invisible until the file exists; the colour theme above always shows. */
+  .board[data-terrain]::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+    border:solid transparent;border-width:26px;border-image-slice:26;border-image-repeat:round;image-rendering:pixelated}
+  .board[data-terrain="fire"]::after {border-image-source:url(img/field-fire.png)}
+  .board[data-terrain="water"]::after{border-image-source:url(img/field-water.png)}
+  .board[data-terrain="earth"]::after{border-image-source:url(img/field-earth.png)}
+  .board[data-terrain="air"]::after {border-image-source:url(img/field-air.png)}
   .hpbadge{position:absolute;left:8px;right:8px;display:flex;align-items:center;gap:8px;padding:5px 10px;z-index:3;
     background:rgba(16,19,16,.66);border:1px solid var(--line);border-radius:11px;backdrop-filter:blur(3px)}
   .hpbadge.foe{top:8px} .hpbadge.me{bottom:8px}
@@ -178,8 +198,8 @@
     image-rendering:pixelated;opacity:.32;transition:opacity .15s} /* mana orb pip; dim = spent */
   .apdots span.on{opacity:1}
   .apdots span.bank{box-shadow:0 0 0 2px var(--shield)} /* the one bankable mana */
-  #ready{background:var(--accent);color:#0e120a;border-color:transparent}
-  #ready:disabled{opacity:.4;background:var(--panel2);color:var(--ink)}
+  #ready{color:#0e120a}                 /* px pri paints the green pixel skin; keep only the dark ink */
+  #ready:disabled{opacity:.5}           /* px handles the grayed-out look */
   .craft.off{opacity:.45;pointer-events:none}
   .planstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:30px;
     background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:8px 12px}
@@ -496,7 +516,7 @@ button.px.lg{ --px:3; font-size:16px }
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
     <div style="display:flex;align-items:center;gap:8px">
       <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
-      <button id="forfeit" hidden style="padding:5px 10px;font-size:12px;border-color:var(--foe);color:var(--foe)">🏳 Forfeit</button>
+      <button id="forfeit" class="px danger sm" hidden>🏳 Forfeit</button>
       <button id="profilechip" hidden title="Profile & settings">
         <span class="pc-ava" id="chipava"></span>
         <span class="pc-txt"><span class="pc-name" id="chipname"></span><span class="pc-rank" id="chiprank"></span></span>
@@ -561,7 +581,7 @@ button.px.lg{ --px:3; font-size:16px }
       <span id="roundmsg">Round 1</span>
       <span id="timer"></span>
       <span class="apdots" id="apdots"></span>
-      <button id="ready">Ready</button>
+      <button id="ready" class="px pri">Ready</button>
     </div>
 
     <div class="craft" id="craft">
@@ -601,7 +621,7 @@ button.px.lg{ --px:3; font-size:16px }
   <span id="coachtext"></span>
   <span style="display:flex;gap:8px;align-items:center;white-space:nowrap">
     <button id="coachskip" style="background:none;border:none;color:var(--soft);font-size:12px;cursor:pointer;padding:2px">Skip</button>
-    <button id="coachnext" hidden>Continue</button>
+    <button id="coachnext" class="px pri" hidden>Continue</button>
   </span>
 </div>
 
@@ -610,7 +630,7 @@ button.px.lg{ --px:3; font-size:16px }
   <p id="oversub" style="color:var(--soft)"></p>
   <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
     <button id="rematch" class="px pri">Rematch</button>
-    <button id="tomenu">Back to menu</button>
+    <button id="tomenu" class="px">Back to menu</button>
   </div>
 </div></div>
 
@@ -1058,7 +1078,10 @@ function applyPlayers(players){
 }
 // the shared terrain banner — reflects the one active landscape (or hides when there is none)
 function setTerrain(element, card){
-  const t = $("terrain"); if (!t) return;
+  const t = $("terrain"), board = $("field");
+  // theme the whole board around the active landscape (colour + drop-in field-<element>.png frame)
+  if (board){ if (element) board.dataset.terrain = element; else board.removeAttribute("data-terrain"); }
+  if (!t) return;
   if (!element){ t.hidden = true; t.innerHTML = ""; return; }
   const nm = (card && CARDS[card]) ? CARDS[card].name : (ELNAME[element] + " terrain");
   t.hidden = false;
@@ -1886,7 +1909,7 @@ function openSettings(){
       `<button data-s="rename">${ui("✏️")} Rename</button>` +
     `</div>` +
     (profile.dev ? `<button class="setwide" data-s="admin" style="border-color:#b98cff;color:#b98cff">${ui("🛠")} Dev: Profiles</button>` : "") +
-    `<button class="setwide" id="setsignout" style="border-color:var(--foe);color:var(--foe)">Sign out</button>`;
+    `<button class="setwide px danger" id="setsignout">Sign out</button>`;
   $("sheettitle").innerHTML = artText("⚙️ Profile & Settings");
   $("sheetbody").innerHTML = body;
   const acts = { cosmetics: openCosmetics, shop: openShop, icons: openIconShop, namecolor: openColorShop, back: openBackShop, rename: openRename, admin: openAdmin };
@@ -1918,23 +1941,22 @@ function tutCombineAllowed(el){
   });
 }
 const GUIDE = [
-  // round 1 — a cheap attack, and what Action Points are
-  { text: "👋 Let's learn by playing. You start with 🔥💧🌍💨 and <b>2 Action Points</b> this round. Craft a quick attack: tap <b>💧 Water</b>, then <b>💨 Air</b> → ⛈️ Storm.", hi: ["base:water", "base:air"], done: () => (inv.storm||0) > 0 },
-  { text: "⛈️ Storm hits for 6. Now attack — <b>drag Storm up into the field</b>.", hi: ["card:storm", "field"], done: () => plan.some((d) => d.card === "storm") },
+  // round 1 — the Law (mixed = attack), and what Action Points are
+  { text: "👋 Let's learn by playing. You have 🔥💧🌍💨 and <b>2 Action Points</b> this round.<br><b>The Law:</b> mix two <i>different</i> elements → an <b>Attack</b>. Tap <b>💧 Water</b>, then <b>💨 Air</b> → ⛈️ Storm.", hi: ["base:water", "base:air"], done: () => (inv.storm||0) > 0 },
+  { text: "⛈️ Storm is a Water/Air attack for 6. Now <b>drag Storm up into the field</b> to strike.", hi: ["card:storm", "field"], done: () => plan.some((d) => d.card === "storm") },
   { text: "That used both your Action Points. Tap <b>Ready</b> to reveal your move.", hi: ["ready"], ready: { events: [{ t: "attack", who: 0, card: "storm", blocked: false, dmg: 6 }], foeHp: 24, logs: ["💥 Your Storm hits the Practice Dummy for 6!"] } },
-  { text: "💥 6 damage! Those dots next to <b>Ready</b> are your <b>Action Points</b> — your mana. Crafting costs 1, playing a card costs 1 — and you gain <b>one more every round</b>, so your plays grow.", cont: true },
-  // round 2 — more AP, advance the tree to a big hit
-  { text: "New round — <b>3 AP</b> now. Build something bigger: tap <b>🔥 Fire</b>, then <b>🌍 Earth</b> → 🌋 Volcano.", setup: () => tutRound(3, 24), hi: ["base:fire", "base:earth"], done: () => (inv.lava||0) > 0 },
-  { text: "🌋 Volcano is a trap — but you can also craft it into a weapon: tap <b>🌋 Volcano</b>, then <b>🔥 Fire</b> → ☄️ Meteor.", hi: ["card:lava", "base:fire"], done: () => (inv.meteor||0) > 0 },
-  { text: "☄️ Meteor hits for 11! Attack — <b>drag the Meteor up into the field</b>.", hi: ["card:meteor", "field"], done: () => plan.some((d) => d.card === "meteor") },
-  { text: "Tap <b>Ready</b>.", hi: ["ready"], ready: { events: [{ t: "attack", who: 0, card: "meteor", blocked: false, dmg: 11 }], foeHp: 13, logs: ["💥 Your Meteor hits for 11!"] } },
-  { text: "☄️ 11 down — more mana means bigger combos. But every attack has a <b>counter shield</b>. Time to defend.", cont: true },
-  // round 3 — shields and blocking
-  { text: "The Dummy is winding up a 🔥 <b>Firebolt</b> at you. Block it: craft <b>💧 Water</b>, then <b>💧 Water</b> again → 💧 Water Ward.", setup: () => tutRound(3, 13), hi: ["base:water"], done: () => (inv.ward||0) > 0 },
-  { text: "Defend — <b>drag the Water Ward up into the field</b> (shields protect you automatically).", hi: ["card:ward", "field"], done: () => plan.some((d) => d.card === "ward") },
-  { text: "Now tap <b>Ready</b> and watch.", hi: ["ready"], ready: { events: [{ t: "defense", who: 0, card: "ward", block: true }, { t: "attack", who: 1, card: "firebolt", blocked: true, dmg: 8 }], foeHp: 13, logs: ["🛡️ Your Ward blocks the Dummy's Firebolt!"] } },
-  { text: "🛡️ <b>Blocked!</b> Your Ward ate the Firebolt — no damage. Each attack has one shield that stops it (🔥Firebolt→💧Ward, ☄️Meteor→🌐Planet…). Guess right and you shut them down.", cont: true },
-  { text: "That's the whole game: <b>craft → plan → reveal</b>, attack and defend, with more mana each round. Sign in and play for real. Good luck! 🏆", cont: true, last: true },
+  { text: "💥 6 damage! The orbs next to <b>Ready</b> are your <b>mana</b> — crafting costs 1, playing a card costs 1, and you gain <b>one more every round</b>, so your plays keep growing.", cont: true },
+  // round 2 — the Law (matching = defense), element blocking, and the mana ramp
+  { text: "New round — <b>3 AP</b>. The other half of the Law: match two of the <i>same</i> element → a <b>Defense</b>. The Dummy is winding up a 💧 Water attack — craft <b>💧 Water</b> + <b>💧 Water</b> → 🛡️ Ward.", setup: () => tutRound(3, 24), hi: ["base:water"], done: () => (inv.ward||0) > 0 },
+  { text: "A defense blocks <b>any attack that shares its element</b> — Ward is Water, so it stops Water attacks. <b>Drag Ward up</b> into the field to set it.", hi: ["card:ward", "field"], done: () => plan.some((d) => d.card === "ward") },
+  { text: "Now tap <b>Ready</b> and watch.", hi: ["ready"], ready: { events: [{ t: "defense", who: 0, card: "ward" }, { t: "attack", who: 1, card: "scald", blocked: true, dmg: 6, mana: 2, by: "ward" }], foeHp: 24, logs: ["🛡️ Your Ward blocks the Dummy's Scald!"] } },
+  { text: "🛡️ <b>Blocked!</b> Scald is Fire/<b>Water</b>, so your Water Ward eats it — and a block <b>charges you +2 mana</b>. Defending well is how you ramp up.", cont: true },
+  // round 3 — landscapes / terrain (a taste of the deeper Law)
+  { text: "Last lesson — reshape the field itself. Start a Fire defense: craft <b>🔥 Fire</b> + <b>🔥 Fire</b> → 🧱 Firewall.", setup: () => tutRound(4, 18), hi: ["base:fire"], done: () => (inv.firewall||0) > 0 },
+  { text: "Push it further: tap <b>🧱 Firewall</b> + <b>🔥 Fire</b> → 🌋 Volcano. Three of one element makes a <b>Landscape</b>.", hi: ["card:firewall", "base:fire"], done: () => (inv.volcano||0) > 0 },
+  { text: "🌋 Volcano is terrain: while it's up, <b>all Fire damage +1</b> — for both players. <b>Drag it up</b> to shape the field.", hi: ["card:volcano", "field"], done: () => plan.some((d) => d.card === "volcano") },
+  { text: "Tap <b>Ready</b>.", hi: ["ready"], ready: { events: [{ t: "landscape", who: 0, card: "volcano", element: "fire" }], foeHp: 18, landscape: "fire", landscapeCard: "volcano", logs: ["🟣 You raise Volcano — all Fire damage +1!"] } },
+  { text: "🟣 Terrain set! That's the whole Law:<br><b>match → Defense · mix → Attack · pure triple → Landscape · pair+catalyst → Spell · all-different → Trap.</b><br>Craft → plan → reveal, with more mana each round. The 📖 Recipe Book has every recipe. Good luck! 🏆", cont: true, last: true },
 ];
 function renderGuide(){
   const g = GUIDE[guideStep];
@@ -1973,7 +1995,8 @@ function startTutorial(){
 }
 function tutPlayReveal(rev){
   clearHi(); $("coach").hidden = true;
-  startReveal({ events: rev.events, logs: rev.logs, players: [meP(), dummyP(rev.foeHp)] });
+  const me = meP(); if (rev.landscape){ me.landscape = rev.landscape; me.landscapeCard = rev.landscapeCard; } // keep terrain up after the reveal
+  startReveal({ events: rev.events, logs: rev.logs, players: [me, dummyP(rev.foeHp)] });
 }
 function endTutorial(){
   tutorialMode = false; clearHi();
