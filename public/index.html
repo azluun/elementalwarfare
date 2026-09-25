@@ -123,6 +123,24 @@
   .avicon{width:1.3em;height:1.3em;object-fit:contain;vertical-align:-0.28em;image-rendering:pixelated;display:inline-block}
   .tierbadge{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.2em;image-rendering:pixelated;display:inline-block}
   .uiart{width:1.15em;height:1.15em;object-fit:contain;vertical-align:-0.18em;image-rendering:pixelated;display:inline-block}
+  /* upper-right profile chip → opens settings */
+  #profilechip{display:flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:22px;background:var(--panel2);border:1px solid var(--line);max-width:190px}
+  #profilechip:hover{border-color:var(--accent)}
+  #profilechip .pc-ava{width:26px;height:26px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;overflow:hidden}
+  #profilechip .pc-ava .avicon,#profilechip .pc-ava .elglyph{width:20px;height:20px;vertical-align:middle}
+  #profilechip .pc-txt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;min-width:0}
+  #profilechip .pc-name{font-size:12.5px;font-weight:700;color:var(--ink);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #profilechip .pc-rank{font-size:10.5px;color:var(--soft);white-space:nowrap}
+  /* settings sheet */
+  .setprof{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+  .setprof .setava{width:56px;height:56px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:34px;flex-shrink:0;overflow:hidden}
+  .setprof .setava .avicon,.setprof .setava .elglyph{width:44px;height:44px;vertical-align:middle}
+  .setprof .setname{font-family:var(--dsp);font-size:18px;font-weight:600}
+  .setprof .setrank{font-size:12px;color:var(--soft);margin-top:2px}
+  .setprof .setcoins{font-size:13px;color:var(--amber);font-weight:700;margin-top:3px}
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .setgrid button{padding:11px 8px;font-size:13px}
+  .setwide{width:100%;margin-top:10px;padding:10px}
   .base.locked{opacity:.3;pointer-events:none;border-color:var(--foe)}
   .combine{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px}
   #undo{padding:6px 10px;font-size:12px;border-color:var(--amber);color:var(--amber);background:var(--panel)}
@@ -364,10 +382,14 @@
 <div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
       <span id="roomtag" style="font-size:12px;color:var(--soft)"></span>
       <button id="forfeit" hidden style="padding:5px 10px;font-size:12px;border-color:var(--foe);color:var(--foe)">🏳 Forfeit</button>
       <button id="guide" style="padding:5px 10px;font-size:12px">📖 Guide</button>
+      <button id="profilechip" hidden title="Profile & settings">
+        <span class="pc-ava" id="chipava"></span>
+        <span class="pc-txt"><span class="pc-name" id="chipname"></span><span class="pc-rank" id="chiprank"></span></span>
+      </button>
     </div>
   </div>
 
@@ -376,11 +398,6 @@
     <div id="authbox" style="display:flex;flex-direction:column;gap:8px;align-items:center">
       <div id="gsigninbtn"></div>
       <div id="signinnote" style="font-size:13px;color:var(--soft);text-align:center">Sign in with Google to play.</div>
-      <div id="profilebox" hidden style="font-size:13px;color:var(--soft);text-align:center">
-        Signed in as <b id="pname" style="color:var(--ink)"></b> · <span id="precord" style="color:var(--accent);font-weight:600"></span>
-        <button id="signout" style="padding:3px 8px;font-size:11px;margin-left:6px">Sign out</button>
-        <div style="margin-top:4px"><b id="pcoins" style="color:var(--amber);font-weight:700">🪙 0</b></div>
-      </div>
     </div>
     <div id="menu" hidden style="display:flex;flex-direction:column;gap:14px">
       <button class="pri" id="quick" style="background:var(--accent);color:#0e120a;border-color:transparent;padding:12px;font-size:15px">⚔️ Find match</button>
@@ -397,17 +414,6 @@
         <code id="invitelink"></code>
       </div>
       <button id="cancelsearch" hidden style="padding:8px;font-size:13px;border-color:var(--foe);color:var(--foe)">✕ Cancel / Back</button>
-      <div class="row">
-        <button id="cosmetics" style="flex:1;padding:8px;font-size:12px">🎖️ Titles</button>
-        <button id="shop" style="flex:1;padding:8px;font-size:12px">🎨 Skins</button>
-        <button id="icons" style="flex:1;padding:8px;font-size:12px">🖼️ Icons</button>
-      </div>
-      <div class="row">
-        <button id="namecolor" style="flex:1;padding:8px;font-size:12px">🔤 Name Color</button>
-        <button id="cardback" style="flex:1;padding:8px;font-size:12px">🂠 Card Back</button>
-        <button id="rename" style="flex:1;padding:8px;font-size:12px">✏️ Rename</button>
-      </div>
-      <button id="admin" hidden style="padding:8px;font-size:13px;border-color:#b98cff;color:#b98cff">🛠 Dev: Profiles</button>
     </div>
     <button id="lb" style="padding:9px;font-size:13px">🏆 Arena Leaderboard</button>
     <button id="book" style="padding:9px;font-size:13px">📖 Recipe Book — all recipes &amp; counters</button>
@@ -539,8 +545,11 @@ const UIART = {
 const ui = (e) => UIART[e] ? artOr(`img/ui-${UIART[e]}.png`, e, "uiart") : e; // a single UI emoji → art-or-emoji
 // combined matcher: base elements, the mana orb, and every UI/effect emoji (longest first so 🛠️ beats 🛠)
 const ART_RE = new RegExp([...Object.keys(UIART), "🔥","💧","🌍","💨","⚡"].sort((a,b)=>b.length-a.length).map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"), "gu");
-// turn every mapped emoji inside a text string into its pixel-art icon (elements, mana, UI/effects)
-const artText = (s) => String(s).replace(ART_RE, (m) => m === "⚡" ? manaIcon() : BASE_BY_EMOJI[m] ? glyph(BASE_BY_EMOJI[m]) : ui(m));
+// turn every mapped emoji into its pixel-art icon — but ONLY in real text, never inside an HTML tag
+// (so an already-rendered <img data-e="🔥"> is left alone instead of being double-processed)
+const artText = (s) => String(s).split(/(<[^>]*>)/).map((seg) =>
+  seg.charAt(0) === "<" ? seg : seg.replace(ART_RE, (m) => m === "⚡" ? manaIcon() : BASE_BY_EMOJI[m] ? glyph(BASE_BY_EMOJI[m]) : ui(m))
+).join("");
 const BASE_BY_EMOJI = Object.fromEntries(Object.entries(BASE).map(([k, v]) => [v, k]));
 const infoHtml = artText; // alias kept for existing call sites
 
@@ -708,7 +717,7 @@ function setProfile(p){
   profile = p;
   $("gsigninbtn").hidden = true;
   $("signinnote").hidden = true;
-  $("profilebox").hidden = false;
+  $("profilechip").hidden = ($("lobby").style.display === "none"); // chip lives on the menu screen
   $("menu").hidden = false;      // playing is unlocked only once signed in
   refreshProfileBox();
   applySkin(); // paint cards with the player's equipped skin
@@ -787,21 +796,22 @@ function applySkin(){ // recolour your own cards to the equipped skin (no gamepl
 function refreshProfileBox(){
   if (!profile) return;
   const r = profile.rating || 1000, t = tierOf(r);
-  $("pname").innerHTML = `${iconGlyph(profile.icon)} ${esc(profile.name)}`; applyNameColor($("pname"), profile.nameColor, t.color);
-  const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)};font-weight:600">${TITLES[profile.title]}</b>` : "";
-  $("precord").innerHTML = `${tierGlyph(t)} ${t.name} · ${r} · ${profile.wins||0}W/${profile.losses||0}L${title}`;
-  $("pcoins").innerHTML = `${ui("🪙")} ${profile.coins || 0}`;
-  $("admin").hidden = !profile.dev; // dev-only profile tools
+  $("chipava").innerHTML = iconGlyph(profile.icon);
+  $("chipname").innerHTML = esc(profile.name); applyNameColor($("chipname"), profile.nameColor, t.color);
+  $("chiprank").innerHTML = `${tierGlyph(t)} ${r}`;
+  // if the settings sheet is open, keep it in sync
+  if (!$("sheet").hidden && settingsOpen) openSettings();
 }
-$("signout").onclick = () => {
+function doSignout(){
   try { google.accounts.id.disableAutoSelect(); } catch(e){}
   try { localStorage.removeItem("duel.profile"); localStorage.removeItem("duel.idtoken"); } catch(e){}
   profile = null; lastIdToken = null;
+  $("sheet").hidden = true;
   $("menu").hidden = true;
-  $("profilebox").hidden = true;
+  $("profilechip").hidden = true;
   $("gsigninbtn").hidden = false;
   $("signinnote").hidden = false;
-};
+}
 
 // ---- message handling ----
 function handle(m){
@@ -859,11 +869,12 @@ function backToMenu(){
   $("lobby").style.display = "flex";
   $("status").textContent = ""; $("roomtag").textContent = "";
   $("forfeit").hidden = true; $("cancelsearch").hidden = true;
+  $("profilechip").hidden = !profile;   // chip returns on the menu
   inv = {}; plan = []; locked = false;
 }
 $("rematch").onclick = rematch;
 $("tomenu").onclick = backToMenu;
-function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; $("cancelsearch").hidden = true; $("forfeit").hidden = false; }
+function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; $("cancelsearch").hidden = true; $("forfeit").hidden = false; $("profilechip").hidden = true; }
 function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElement("div"); d.textContent=t; l.prepend(d); }
 
 // ---- round / plan state ----
@@ -1540,7 +1551,6 @@ function equipTitle(title){
     .then((r) => r.json()).then((d) => { if (d.profile){ profile = d.profile; refreshProfileBox(); openCosmetics(); } })
     .catch(() => {});
 }
-$("cosmetics").onclick = openCosmetics;
 
 // ---- card-skin shop: spend coins on cosmetic card backgrounds (reuses the sheet overlay) ----
 function openShop(){
@@ -1630,10 +1640,6 @@ function shopAction(action, item, kind){
       if (d.profile){ profile = d.profile; cacheProfile(); refreshProfileBox(); applySkin(); (SHOP_REOPEN[kind] || openShop)(); }
     }).catch(() => {});
 }
-$("shop").onclick = openShop;
-$("icons").onclick = openIconShop;
-$("namecolor").onclick = openColorShop;
-$("cardback").onclick = openBackShop;
 
 // ---- rename (costs coins); reuses the name modal ----
 let renameMode = false;
@@ -1657,7 +1663,6 @@ function doRename(n){
       else { $("pnameerr").style.color = "var(--foe)"; $("pnameerr").textContent = d.error === "name taken" ? "⚠ That name is taken." : d.error === "not enough coins" ? "⚠ You need 🪙 20 to change your name." : (d.error || "Failed — try again."); }
     }).catch((e) => { $("pnamesave").disabled = false; if (e.message !== "auth-required") $("pnameerr").textContent = "Network error."; });
 }
-$("rename").onclick = openRename;
 
 // ---- dev-only profile admin (view / repair / normalize); server enforces DEV_EMAILS ----
 function adminCall(action, extra){
@@ -1703,7 +1708,43 @@ function adminEdit(id){
     };
   });
 }
-$("admin").onclick = openAdmin;
+
+// ---- profile chip → settings / customization hub ----
+let settingsOpen = false;
+function openSettings(){
+  if (!profile) return;
+  settingsOpen = true;
+  const r = profile.rating || 1000, t = tierOf(r);
+  const title = profile.title && TITLES[profile.title] ? ` · <b style="color:${titleColor(profile.title, t.color)}">${TITLES[profile.title]}</b>` : "";
+  const body =
+    `<div class="setprof">` +
+      `<div class="setava">${iconGlyph(profile.icon)}</div>` +
+      `<div>` +
+        `<div class="setname">${nameHTML(esc(profile.name), profile.nameColor, t.color)}</div>` +
+        `<div class="setrank">${tierGlyph(t)} ${t.name} · ${r} ELO · ${profile.wins||0}W/${profile.losses||0}L${title}</div>` +
+        `<div class="setcoins">${ui("🪙")} ${profile.coins||0}</div>` +
+      `</div>` +
+    `</div>` +
+    `<div class="isection">Customize</div>` +
+    `<div class="setgrid">` +
+      `<button data-s="cosmetics">${ui("🎖️")} Titles</button>` +
+      `<button data-s="shop">${ui("🎨")} Card Skins</button>` +
+      `<button data-s="icons">${ui("🖼️")} Profile Icon</button>` +
+      `<button data-s="namecolor">${ui("🔤")} Name Color</button>` +
+      `<button data-s="back">🂠 Card Back</button>` +
+      `<button data-s="rename">${ui("✏️")} Rename</button>` +
+    `</div>` +
+    (profile.dev ? `<button class="setwide" data-s="admin" style="border-color:#b98cff;color:#b98cff">${ui("🛠")} Dev: Profiles</button>` : "") +
+    `<button class="setwide" id="setsignout" style="border-color:var(--foe);color:var(--foe)">Sign out</button>`;
+  $("sheettitle").innerHTML = artText("⚙️ Profile & Settings");
+  $("sheetbody").innerHTML = body;
+  const acts = { cosmetics: openCosmetics, shop: openShop, icons: openIconShop, namecolor: openColorShop, back: openBackShop, rename: openRename, admin: openAdmin };
+  $("sheetbody").querySelectorAll("[data-s]").forEach((b) => b.onclick = () => { settingsOpen = false; acts[b.dataset.s](); });
+  $("setsignout").onclick = doSignout;
+  $("sheet").hidden = false;
+}
+$("profilechip").onclick = openSettings;
+$("sheetclose").addEventListener("click", () => { settingsOpen = false; });
 
 // ---- guided tutorial: a scripted 3-round match coaching attack, mana, and defense ----
 let tutorialMode = false, guideStep = 0;
@@ -1773,7 +1814,7 @@ function startTutorial(){
   inv = {}; plan = []; slots = [null,null]; locked = false; round = 1; apBudget = 2; apSpent = 0; shownHp = [30,30]; foeStaged = null;
   manaBase = 2; manaCarried = 0; manaNextCap = 0;
   document.body.classList.add("tut-on");
-  $("lobby").style.display = "none"; $("over").style.display = "none";
+  $("lobby").style.display = "none"; $("over").style.display = "none"; $("profilechip").hidden = true;
   $("arena").style.display = "flex"; $("roomtag").textContent = "Tutorial";
   applyPlayers([meP(), dummyP(30)]);
   updateUI();
@@ -1786,7 +1827,7 @@ function tutPlayReveal(rev){
 function endTutorial(){
   tutorialMode = false; clearHi();
   document.body.classList.remove("tut-on");
-  $("coach").hidden = true; $("arena").style.display = "none"; $("lobby").style.display = "flex"; $("roomtag").textContent = "";
+  $("coach").hidden = true; $("arena").style.display = "none"; $("lobby").style.display = "flex"; $("roomtag").textContent = ""; $("profilechip").hidden = !profile;
   if (profile){ profile.tutorialDone = true; cacheProfile(); syncProgress(); } // save completion to the DB, once per account
 }
 $("coachnext").onclick = () => { const g = GUIDE[guideStep]; if (g.last) endTutorial(); else { guideStep++; renderGuide(); } };
