@@ -1,14 +1,18 @@
 /* Elemental Duel service worker — app shell + runtime image cache.
    Bump CACHE to force a refresh of the precached shell. */
-const CACHE = "ed-v1";
+const CACHE = "ed-v2";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest",
   "/img/app-icon-192.png", "/img/app-icon-512.png"];
 // live/dynamic endpoints that must always hit the network (never served stale)
 const NO_CACHE = ["/config", "/leaderboard", "/manifest", "/auth", "/cosmetic", "/shop", "/admin"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // precache the shell, but DON'T auto-activate — wait until the page's "Refresh" tells us to,
+  // so a running game is never swapped out from under the player.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
 });
+// the page posts this when the user taps "Refresh" on the update toast
+self.addEventListener("message", (e) => { if (e.data === "SKIP_WAITING") self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys()
     .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
