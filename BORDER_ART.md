@@ -56,6 +56,8 @@ values to match. Keep `border-width` and `border-image-slice` equal for 1:1 cris
 - **A short "terrain forms" animation** when the landscape lands (the frame sweeping in), on top
   of the reveal we already play.
 
-## Status
-- Colour theme (border + glow + wash): ✅ live now, no art needed.
-- Ornate frame art: ⬜ `field-fire.png` · ⬜ `field-water.png` · ⬜ `field-earth.png` · ⬜ `field-air.png`
+## Status — 🎉 complete
+- Colour theme (border + glow + wash): ✅ live.
+- Ornate frame art: ✅ `field-fire.png` · ✅ `field-water.png` · ✅ `field-earth.png` · ✅ `field-air.png` (all in, verified on the board).
+
+To swap one later, just replace the PNG in `public/img/` (9-slice, 128×128, transparent centre).
