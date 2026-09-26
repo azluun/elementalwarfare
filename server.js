@@ -22,6 +22,22 @@ function imgManifest() {
 }
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif", ".json": "application/json", ".webmanifest": "application/manifest+json" };
 
+// --- lightweight per-IP rate limiter for the write endpoints (a public URL can be hammered) ---
+const postHits = new Map(); // ip -> recent timestamps
+function rateLimited(req, max = 40, windowMs = 10000) {
+  const ip = String(req.headers["x-forwarded-for"] || (req.socket && req.socket.remoteAddress) || "?").split(",")[0].trim();
+  const now = Date.now();
+  let arr = postHits.get(ip); if (!arr) { arr = []; postHits.set(ip, arr); }
+  while (arr.length && now - arr[0] > windowMs) arr.shift();
+  if (arr.length >= max) return true;
+  arr.push(now);
+  if (postHits.size > 5000) for (const [k, v] of postHits) if (!v.length || now - v[v.length - 1] > windowMs) postHits.delete(k); // prune stale IPs
+  return false;
+}
+// --- presence: clients heartbeat via /stats so the menu can show a live "online" count ---
+const presence = new Map(); // clientId -> lastSeen ms
+function prunePresence(now) { for (const [k, t] of presence) if (now - t > 20000) presence.delete(k); }
+
 // --- Google Sign-In (optional): if no client id is configured, the game runs guest-only ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const DEV_EMAILS = new Set((process.env.DEV_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)); // accounts that can equip the secret "Developer" title
@@ -197,6 +213,18 @@ const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID, storage: store.mode, profiles: store.count() })); }
   if (url === "/manifest") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-cache" }); return res.end(JSON.stringify({ img: imgManifest() })); }
+  if (url === "/stats") { // heartbeat + live counts for the menu's "online" badge
+    const c = new URLSearchParams(req.url.split("?")[1] || "").get("c");
+    const now = Date.now();
+    if (c) presence.set(String(c).slice(0, 40), now);
+    prunePresence(now);
+    let inGame = 0; for (const r of rooms.values()) inGame += (r.players || []).filter((p) => !p.isBot).length;
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-cache" });
+    return res.end(JSON.stringify({ online: presence.size, searching: waiting ? 1 : 0, inGame }));
+  }
+  if (req.method === "POST" && (url === "/auth" || url === "/cosmetic" || url === "/shop" || url === "/admin") && rateLimited(req)) {
+    res.writeHead(429, { "content-type": "application/json" }); return res.end(JSON.stringify({ error: "rate limited — slow down" }));
+  }
   if (url === "/leaderboard") {
     const top = store.allProfiles().filter((p) => p.name)
       .sort((a, b) => (b.rating || 1000) - (a.rating || 1000)).slice(0, 20)
@@ -547,6 +575,10 @@ function forceResolve(room) {
 
 wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
+    const now = Date.now();                         // per-socket flood guard: drop anything past ~60 msgs / 2s
+    ws._mt = ws._mt || []; ws._mt.push(now);
+    while (ws._mt.length && now - ws._mt[0] > 2000) ws._mt.shift();
+    if (ws._mt.length > 60) return;
     let m;
     try { m = JSON.parse(raw); } catch { return; }
     try {  // one malformed/unexpected message must never take the server (and everyone's matches) down
@@ -626,8 +658,12 @@ wss.on("connection", (ws) => {
 
     if (m.type === "plan") {
       if (me.ready) return;                        // already locked in this round
-      me.plan = { deploys: Array.isArray(m.deploys) ? m.deploys.slice(0, 16) : [] };
-      me.reportedLeft = Math.max(0, m.left | 0);   // client's true unspent mana (counts crafts, not just plays)
+      // validate the plan: only real cards, whose declared kind matches the card, and never more cards than your AP
+      const raw = Array.isArray(m.deploys) ? m.deploys : [];
+      const valid = raw.filter((d) => d && typeof d.card === "string" && KINDOF[d.card] && d.k === KINDOF[d.card]);
+      const cap = Math.max(0, Math.min(16, me.mana || 0)); // each play costs >=1 AP, so plays can't exceed the round's mana
+      me.plan = { deploys: valid.slice(0, cap) };
+      me.reportedLeft = Math.max(0, Math.min(me.mana || 0, m.left | 0)); // clamp banked mana to what you actually had
       me.ready = true;
       // tell the opponent the KIND of each committed card (for orientation) — never which card
       const KIND = (k) => (k === "attack" || k === "shield" || k === "trap" || k === "spell" || k === "landscape") ? k : "attack";

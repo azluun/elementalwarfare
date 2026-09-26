@@ -37,6 +37,13 @@
   .updtoast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9500;display:flex;align-items:center;
     padding:9px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
     font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:riseIn .35s ease-out}
+  /* live "online" badge, bottom-left (so testers can tell if anyone's around before queueing) */
+  .onlinebadge{position:fixed;left:12px;bottom:12px;z-index:8000;display:flex;align-items:center;gap:7px;
+    padding:6px 11px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--soft);
+    font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .onlinebadge .dot{width:8px;height:8px;border-radius:50%;background:var(--soft);flex:none}
+  .onlinebadge .dot.live{background:var(--you);animation:pulseDot 1.9s infinite}
+  @keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(84,180,131,.5)}70%{box-shadow:0 0 0 7px rgba(84,180,131,0)}100%{box-shadow:0 0 0 0 rgba(84,180,131,0)}}
   /* menu footer: version + feedback link */
   .menufoot{text-align:center;color:var(--soft);font-size:12px;margin-top:14px}
   .menufoot a{color:var(--shield);text-decoration:none;cursor:pointer} .menufoot a:hover{text-decoration:underline}
@@ -543,6 +550,7 @@ button.px.lg{ --px:3; font-size:16px }
     <div id="bootpct" class="boot-pct">Loading…</div>
   </div>
 </div>
+<div id="onlinebadge" class="onlinebadge" hidden></div>
 <div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <h1>Elemental&nbsp;Due<span class="z">l</span></h1>
@@ -790,6 +798,18 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;
 const APP_VERSION = "2.0";
 const FEEDBACK_URL = "https://github.com/azluun/elementalwarfare/issues";
 { const v = $("verlabel"), f = $("feedback"); if (v) v.textContent = "v" + APP_VERSION; if (f) f.href = FEEDBACK_URL; }
+// ---- live presence: heartbeat to /stats so the menu shows how many are online (don't queue into a dead server) ----
+const CID = (() => { try { let c = localStorage.getItem("edcid"); if (!c) { c = Math.random().toString(36).slice(2); localStorage.setItem("edcid", c); } return c; } catch(e){ return Math.random().toString(36).slice(2); } })();
+function renderOnline(s){
+  const el = $("onlinebadge"); if (!el) return;
+  if ($("lobby") && $("lobby").style.display === "none"){ el.hidden = true; return; } // only on the menu / while searching
+  const n = Math.max(1, s.online || 1);              // count includes you
+  el.innerHTML = `<span class="dot ${n > 1 ? "live" : ""}"></span>${n} online` +
+    (s.searching > 0 ? ` · ${s.searching} in queue` : (s.inGame > 0 ? ` · ${s.inGame} in game` : ""));
+  el.hidden = false;
+}
+function pollStats(){ fetch("/stats?c=" + encodeURIComponent(CID)).then((r) => r.json()).then(renderOnline).catch(() => {}); }
+pollStats(); setInterval(pollStats, 12000);
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();
 
@@ -1028,9 +1048,10 @@ const CARD_BACKS = {
 };
 // a coloured name span (rainbow gets its own animated class); falls back to the tier colour
 function nameHTML(name, colorId, fallback){
+  const safe = esc(name);                         // escape here so no caller can ever inject via a player name
   const c = NAME_COLORS[colorId];
-  if (c && c.color === "rainbow") return `<span class="rainbow-text">${name}</span>`;
-  return `<span style="color:${(c && c.color) || fallback || "inherit"}">${name}</span>`;
+  if (c && c.color === "rainbow") return `<span class="rainbow-text">${safe}</span>`;
+  return `<span style="color:${(c && c.color) || fallback || "inherit"}">${safe}</span>`;
 }
 // apply a name colour directly to an element (for #pname)
 function applyNameColor(el, colorId, fallback){
@@ -1121,10 +1142,11 @@ function backToMenu(){
   $("forfeit").hidden = true; $("cancelsearch").hidden = true;
   $("profilechip").hidden = !profile;   // chip returns on the menu
   inv = {}; plan = []; locked = false;
+  pollStats();                          // refresh + re-show the online badge on the menu
 }
 $("rematch").onclick = rematch;
 $("tomenu").onclick = backToMenu;
-function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; $("cancelsearch").hidden = true; $("forfeit").hidden = false; $("profilechip").hidden = true; }
+function enterArena(){ $("lobby").style.display="none"; $("arena").style.display="flex"; $("cancelsearch").hidden = true; $("forfeit").hidden = false; $("profilechip").hidden = true; if ($("onlinebadge")) $("onlinebadge").hidden = true; }
 function addLog(t){ const l=$("log"); if(!l) return; const d=document.createElement("div"); d.textContent=t; l.prepend(d); }
 
 // ---- round / plan state ----
@@ -1153,7 +1175,7 @@ function newRound(m){
   startTimer(m.seconds);
 }
 function fighterLabel(p, you){
-  const ic = `${iconGlyph(p.icon || "default")} `, nm = esc(p.name);
+  const ic = `${iconGlyph(p.icon || "default")} `, nm = p.name;
   if (p.rating == null) return ic + nameHTML(nm, p.nameColor, null) + (you ? " (you)" : "");
   const t = tierOf(p.rating);
   const title = p.title && TITLES[p.title] ? ` <span style="color:${titleColor(p.title, t.color)}">${TITLES[p.title]}</span>` : "";
@@ -1723,7 +1745,7 @@ function openLeaderboard(){ setSheetBack(null);
     const rows = (d.top || []).map((p, i) => {
       const t = tierOf(p.rating), mine = p.name === me ? ' style="background:var(--panel2)"' : "";
       return `<div class="crow"${mine}><span style="width:26px;color:var(--soft)">#${i+1}</span>` +
-        `<span class="a">${iconGlyph(p.icon)} ${nameHTML(esc(p.name), p.nameColor, "var(--ink)")}</span>` +
+        `<span class="a">${iconGlyph(p.icon)} ${nameHTML(p.name, p.nameColor, "var(--ink)")}</span>` +
         `<span>${tierGlyph(t)} ${p.rating}</span><span class="s" style="color:var(--soft)">${p.wins}W/${p.losses}L</span></div>`;
     }).join("");
     $("sheetbody").innerHTML = rows || `<p class="sheetnote">No ranked players yet — win a match to claim the top spot!</p>`;
@@ -1995,7 +2017,7 @@ function openSettings(){
     `<div class="setprof">` +
       `<div class="setava">${iconGlyph(profile.icon)}</div>` +
       `<div>` +
-        `<div class="setname">${nameHTML(esc(profile.name), profile.nameColor, t.color)}</div>` +
+        `<div class="setname">${nameHTML(profile.name, profile.nameColor, t.color)}</div>` +
         `<div class="setrank">${tierGlyph(t)} ${t.name} · ${r} ELO · ${profile.wins||0}W/${profile.losses||0}L${title}</div>` +
         `<div class="setcoins">${ui("🪙")} ${profile.coins||0}</div>` +
       `</div>` +
