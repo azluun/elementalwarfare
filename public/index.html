@@ -589,8 +589,7 @@ button.px.lg{ --px:3; font-size:16px }
     <button class="px" id="lb">🏆 Arena Leaderboard</button>
     <button class="px" id="book">📖 Recipe Book — all recipes &amp; counters</button>
     <button class="px" id="howto">❔ How to play</button>
-    <button class="px" id="patch">📜 Patch Notes</button>
-    <div class="menufoot"><span id="verlabel"></span> · <a id="feedback" target="_blank" rel="noopener">💬 Feedback &amp; bugs</a></div>
+    <div class="menufoot"><span id="verlabel"></span> · <a id="feedback">💬 Feedback &amp; bugs</a></div>
   </div>
 
   <!-- ARENA -->
@@ -795,8 +794,8 @@ function showInstallBtn(){
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); // names go through innerHTML
 // build label + feedback destination (public test). Swap FEEDBACK_URL for a Discord/form invite any time.
-const APP_VERSION = "2.0";
-const FEEDBACK_URL = "https://github.com/azluun/elementalwarfare/issues";
+const APP_VERSION = "0.1";
+const FEEDBACK_URL = "mailto:holi.farkas@gmail.com?subject=Elemental%20Duel%20feedback";
 { const v = $("verlabel"), f = $("feedback"); if (v) v.textContent = "v" + APP_VERSION; if (f) f.href = FEEDBACK_URL; }
 // ---- live presence: heartbeat to /stats so the menu shows how many are online (don't queue into a dead server) ----
 const CID = (() => { try { let c = localStorage.getItem("edcid"); if (!c) { c = Math.random().toString(36).slice(2); localStorage.setItem("edcid", c); } return c; } catch(e){ return Math.random().toString(36).slice(2); } })();
@@ -1753,67 +1752,6 @@ function openLeaderboard(){ setSheetBack(null);
 }
 $("lb").onclick = openLeaderboard;
 
-// ---- patch notes (League-style changelog) ----
-const PATCH_NOTES = [
-  { v:"2.0", date:"Sep 25", title:"The Law of Elements", notes:[
-    ["New", "🧪 Every card is now built from 🔥💧🌍💨 by one rule: <b>matching pair→Defense, mixed pair→Attack, pure triple→Landscape, pair+catalyst→Spell, all-different→Trap.</b>"],
-    ["New", "🟡 <b>Spells</b> — a yellow instant type. Renewal heals; Ember/Tide/Stone/Wind rites give your next attack of that element +2; Siphon burns enemy mana."],
-    ["New", "🟣 <b>Landscapes</b> — a purple terrain type. One shared slot; +1 to ALL damage of its element (both players) until someone reshapes it."],
-    ["Change", "🛡️ <b>Defenses no longer heal.</b> A defense blocks any attack sharing its element, and a block charges you <b>+2 mana</b> — the only ramp, so it's tied to being attacked."],
-    ["Change", "🟢 <b>Traps are conditional</b> now — they spring only when their trigger happens (an expensive attack, a heal, your low HP, or the enemy banking mana)."],
-    ["Remove", "🕯️ Hearth & Dew (the proactive mana generators) are gone — no more snowballing into infinite mana."],
-  ]},
-  { v:"1.7", date:"Sep 24", title:"Cleaner Combat", notes:[
-    ["Remove", "🌀 Element disabling is gone — a 1-round disable that a cleanse only fixed next turn was pointless."],
-    ["Nerf", "💚 Healing across the board is much smaller now."],
-    ["New", "⚡ Hearth, Dew and the Energy trap grant <b>+1 mana</b> next round."],
-    ["Change", "🪙 Two clean cost tiers — a cheap attack is answered by a cheap shield, an expensive one by an expensive shield."],
-    ["Change", "🦠 Plague is a bit cheaper to build (🟤 Mud + 🔥 Fire)."],
-    ["New", "📱 Long-press a card to preview it, then drag from the hold to play it."],
-  ]},
-  { v:"1.6", date:"Sep 24", title:"Traps & Patch Notes", notes:[
-    ["New", "🪤 <b>Trap cards</b> — Volcano, Steam, Energy and Mud are now playable traps that spring when your opponent attacks. Every element you craft is finally useful (or still crafts into a bigger card)."],
-    ["New", "📜 This patch notes panel."],
-  ]},
-  { v:"1.5", date:"Sep 24", title:"Style Points", notes:[
-    ["New", "🔤 Name colours, including an animated Rainbow."],
-    ["New", "🂠 Animated card backs your opponent sees when you play."],
-    ["New", "🖼️ Profile icons, and a ✏️ 20-coin name change."],
-  ]},
-  { v:"1.4", date:"Sep 23", title:"Tactical Mana", notes:[
-    ["Change", "🔷 Mana banking — base grows every 2 rounds, and you can carry 1 unspent mana into each even round."],
-    ["New", "🃏 Card inspector with a full build tree. Long-press a card in your hand to open it."],
-  ]},
-  { v:"1.3", date:"Sep 23", title:"Rewards", notes:[
-    ["New", "🪙 Coins on every win — long, hard-fought games pay the most."],
-    ["New", "🎨 Card-skin shop to spend them."],
-  ]},
-  { v:"1.2", date:"Sep 22", title:"Combat Overhaul", notes:[
-    ["Change", "⛔ Attacks now disable an enemy element for a round, on top of damage."],
-    ["Change", "🛡️ Defences gained heals and element restores; added Hearth and Dew."],
-    ["Remove", "🌀 Curse was removed."],
-  ]},
-  { v:"1.1", date:"Sep 22", title:"Quality of Life", notes:[
-    ["New", "⚔️ Central playing field for short, one-handed drags."],
-    ["New", "🂠 See your opponent's committed card count live during planning."],
-    ["Change", "Player names are now unique."],
-  ]},
-  { v:"1.0", date:"Sep 20", title:"Launch", notes:[
-    ["New", "Turn-based elemental card duel: craft → plan → simultaneous reveal."],
-    ["New", "Matchmaking, friend rooms, an AI bot, and arena ranking with tiers."],
-  ]},
-];
-function openPatch(){ setSheetBack(null);
-  $("sheettitle").innerHTML = artText("📜 Patch Notes");
-  const tagColor = { New:"var(--accent)", Change:"var(--shield)", Buff:"var(--you)", Nerf:"var(--foe)", Remove:"var(--foe)", Fix:"var(--amber)" };
-  $("sheetbody").innerHTML = PATCH_NOTES.map((p) =>
-    `<div class="patch"><div class="patchhead"><span class="pv">Patch ${p.v}</span> · ${p.title} <span class="s" style="color:var(--soft);font-family:var(--body);font-size:12px">${p.date}</span></div>` +
-    p.notes.map(([tag, txt]) => `<div class="pnote"><span class="ptag" style="background:${tagColor[tag] || 'var(--line)'}">${tag}</span><span>${txt}</span></div>`).join("") +
-    `</div>`).join("");
-  $("sheet").hidden = false;
-}
-$("patch").onclick = openPatch;
-
 // ---- cosmetics: equip a title unlocked by your peak tier (reuses the sheet overlay) ----
 function openCosmetics(){ setSheetBack(openSettings);
   if (!profile) return;
@@ -2134,7 +2072,7 @@ $("howto").onclick = startTutorial;
 
 // paint the emoji on the static menu / header buttons into drop-in art (falls back to the emoji)
 (function paintStaticEmojis(){
-  ["quick","bot","cosmetics","shop","icons","namecolor","rename","admin","lb","book","howto","patch","guide","forfeit","undo"]
+  ["quick","bot","cosmetics","shop","icons","namecolor","rename","admin","lb","book","howto","forfeit","undo"]
     .forEach((id) => { const el = $(id); if (el) el.innerHTML = artText(el.innerHTML); });
 })();
 </script>
