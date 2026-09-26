@@ -37,6 +37,9 @@
   .updtoast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9500;display:flex;align-items:center;
     padding:9px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
     font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:riseIn .35s ease-out}
+  /* menu footer: version + feedback link */
+  .menufoot{text-align:center;color:var(--soft);font-size:12px;margin-top:14px}
+  .menufoot a{color:var(--shield);text-decoration:none;cursor:pointer} .menufoot a:hover{text-decoration:underline}
   .wrap{max-width:760px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;
     padding:16px}
   h1{font-family:var(--dsp);font-weight:600;margin:0;font-size:clamp(24px,6vw,34px);letter-spacing:-.02em}
@@ -579,6 +582,7 @@ button.px.lg{ --px:3; font-size:16px }
     <button class="px" id="book">📖 Recipe Book — all recipes &amp; counters</button>
     <button class="px" id="howto">❔ How to play</button>
     <button class="px" id="patch">📜 Patch Notes</button>
+    <div class="menufoot"><span id="verlabel"></span> · <a id="feedback" target="_blank" rel="noopener">💬 Feedback &amp; bugs</a></div>
   </div>
 
   <!-- ARENA -->
@@ -782,6 +786,10 @@ function showInstallBtn(){
   document.body.appendChild(b);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); // names go through innerHTML
+// build label + feedback destination (public test). Swap FEEDBACK_URL for a Discord/form invite any time.
+const APP_VERSION = "2.0";
+const FEEDBACK_URL = "https://github.com/azluun/elementalwarfare/issues";
+{ const v = $("verlabel"), f = $("feedback"); if (v) v.textContent = "v" + APP_VERSION; if (f) f.href = FEEDBACK_URL; }
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("room").value = params.get("room").toUpperCase();
 
@@ -804,8 +812,24 @@ function openSocket(firstMsg){
   $("status").textContent = "Connecting…";
   ws = new WebSocket(location.origin.replace(/^http/,"ws"));
   ws.onopen = () => ws.send(JSON.stringify(firstMsg(name)));
-  ws.onclose = () => $("status").textContent = "Disconnected.";
-  ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+  ws.onclose = () => onSocketDrop();            // deliberate exits null ws.onclose first, so they never land here
+  ws.onerror = () => { try { ws.close(); } catch(e){} };
+  ws.onmessage = (ev) => { try { handle(JSON.parse(ev.data)); } catch(e){ console.error(e); } };
+}
+// the connection dropped unexpectedly (lost network, or the server redeployed). No mid-match rejoin, so route out cleanly.
+function onSocketDrop(){
+  $("status").textContent = "Disconnected.";
+  const inMatch = $("arena").style.display !== "none" && !tutorialMode;
+  if (inMatch){ connToast("⚠️ Connection lost — the match ended.", true); }
+  else { $("cancelsearch").hidden = true; $("invite").hidden = true; connToast("⚠️ Connection lost.", false); }
+}
+function connToast(msg, backBtn){
+  const old = $("conntoast"); if (old) old.remove();
+  const t = document.createElement("div"); t.id = "conntoast"; t.className = "updtoast"; t.textContent = msg;
+  const b = document.createElement("button"); b.className = "px sm"; b.textContent = backBtn ? "Back to menu" : "Dismiss"; b.style.marginLeft = "10px";
+  b.onclick = () => { t.remove(); if (backBtn) backToMenu(); };
+  t.appendChild(b); document.body.appendChild(t);
+  if (!backBtn) setTimeout(() => { if ($("conntoast") === t) t.remove(); }, 6000);
 }
 const pid = () => profile ? profile.id : null;
 function connect(room){ if (!profile) return; quick = false; lastMode = "room"; lastRoom = room; openSocket((name)=>({ type:"join", room, name, playerId: pid() })); showInvite(room); $("cancelsearch").hidden = false; }

@@ -6,6 +6,10 @@ const path = require("path");
 const { WebSocketServer } = require("ws");
 const store = require("./storage");
 
+// keep the single game process alive: one bad message or rejected promise must not drop everyone's live matches
+process.on("uncaughtException", (e) => console.error("uncaughtException:", (e && e.stack) || e));
+process.on("unhandledRejection", (e) => console.error("unhandledRejection:", (e && e.stack) || e));
+
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, "public");
 // list every image in public/img (cached) so the client can preload them all on boot
@@ -545,6 +549,7 @@ wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
+    try {  // one malformed/unexpected message must never take the server (and everyone's matches) down
 
     if (m.type === "join") {
       leaveRoom(ws); // in case this is a rematch on an existing socket
@@ -631,6 +636,7 @@ wss.on("connection", (ws) => {
       if (opp.isBot) botPlan(room, opp);
       if (room.players.every((p) => p.ready)) resolveRound(room);
     }
+    } catch (err) { console.error("ws message handler error:", (err && err.stack) || err); }
   });
 
   ws.on("close", () => {
